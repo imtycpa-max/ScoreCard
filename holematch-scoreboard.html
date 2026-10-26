@@ -1,0 +1,1864 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html{-webkit-text-size-adjust:100%}body{margin:0}</style><title>홀매치 스코어보드</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Serif+KR:wght@600;800&display=swap">
+<style>
+/* Layout: 한 손으로 쓰는 세로형 스코어카드. 맨 위 점수판 → 홀별 표(입력과 결과가 한 줄) → 사진·규칙 */
+:root {
+  --bg: #F1F4EE;
+  --surface: #FFFFFF;
+  --field: #F6F8F3;
+  --ink: #16221B;
+  --muted: #5B6A61;
+  --line: #D5DCD2;
+  --accent: #1E6A49;
+  --on-accent: #FFFFFF;
+  --a: #BF3A29;
+  --a-soft: #F8E4E0;
+  --b: #2457A6;
+  --b-soft: #E1EAF8;
+  --f-display: 'Noto Serif KR', 'Nanum Myeongjo', Batang, serif;
+  --f-body: 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  --f-num: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101712; --surface: #18211B; --field: #202B24; --ink: #E8EEE9; --muted: #93A399; --line: #2E3B32;
+    --accent: #5FBF8F; --on-accent: #0C1A12;
+    --a: #F0705E; --a-soft: #3A201C; --b: #86AAF0; --b-soft: #1C2B46;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101712; --surface: #18211B; --field: #202B24; --ink: #E8EEE9; --muted: #93A399; --line: #2E3B32;
+  --accent: #5FBF8F; --on-accent: #0C1A12;
+  --a: #F0705E; --a-soft: #3A201C; --b: #86AAF0; --b-soft: #1C2B46;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 560px; margin-inline: auto; display: flex; flex-direction: column; gap: 22px; }
+h1, h2 { font-family: var(--f-display); margin: 0; text-wrap: balance; }
+header { display: flex; flex-direction: column; gap: 10px; }
+header { text-align: center; }
+h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 17px; font-weight: 800; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.hint { color: var(--muted); font-size: 13px; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 예시 안내 */
+.example { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
+  background: var(--field); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.example[hidden] { display: none; }
+
+/* 점수판 */
+.board { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  display: grid; grid-template-columns: 1fr 1fr; }
+.team { padding: 14px 14px 12px; min-width: 0; }
+.team.ta { background: var(--a-soft); color: var(--ink); }
+.team.tb { background: var(--b-soft); text-align: right; }
+.tl { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+.ta .tl { color: var(--a); } .tb .tl { color: var(--b); }
+.pl { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big { font-family: var(--f-display); font-weight: 800; font-size: 54px; line-height: 1.05; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.ta .big { color: var(--a); } .tb .big { color: var(--b); }
+.sub { font-family: var(--f-num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.status { grid-column: 1 / -1; padding: 11px 14px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; font-size: 14px; }
+.status b { font-weight: 700; }
+.status .money { font-family: var(--f-num); font-size: 13px; color: var(--muted); }
+
+/* 선수 */
+.players { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pgroup { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pgroup > span { font-size: 12px; font-weight: 700; }
+.pgroup.ga > span { color: var(--a); } .pgroup.gb > span { color: var(--b); }
+.name { width: 100%; min-width: 0; height: 40px; padding: 0 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.ga .name { border-left: 4px solid var(--a); } .gb .name { border-left: 4px solid var(--b); }
+
+/* 표 */
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+/* 점수 표: 스크롤해도 선수 이름 머리글이 화면 위에 남도록 한다 */
+.tbl-wrap.score { overflow: visible; overflow: clip; }
+.tbl-wrap.score table { min-width: 0; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+table { border-collapse: collapse; width: 100%; min-width: 340px; table-layout: fixed; }
+thead th { font-size: 12px; font-weight: 700; padding: 8px 2px; background: var(--surface); box-shadow: inset 0 -1px 0 var(--line); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; }
+thead th span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
+thead th.ha { color: var(--a); box-shadow: inset 0 -3px 0 var(--a); }
+thead th.hb { color: var(--b); box-shadow: inset 0 -3px 0 var(--b); }
+tbody td, tbody th { padding: 3px 0; border-bottom: 1px solid var(--line); text-align: center; }
+tbody tr.hole:nth-child(even) td, tbody tr.hole:nth-child(even) th { background: color-mix(in srgb, var(--field) 55%, transparent); }
+.hn { font-family: var(--f-num); font-weight: 600; font-size: 15px; }
+.hn i { display: block; font-style: normal; font-family: var(--f-body); font-size: 10px; font-weight: 700; color: var(--accent); line-height: 1; min-height: 10px; }
+input.par { width: 30px; height: 30px; text-align: center; border: 0; background: transparent; font-family: var(--f-num); font-size: 15px; color: var(--muted); border-radius: 6px; padding: 0; }
+input.par:focus { background: var(--field); }
+input.sc { width: 38px; height: 38px; text-align: center; padding: 0; background: var(--field); border: 1.5px solid var(--line); border-radius: 8px;
+  font-family: var(--f-num); font-weight: 500; font-size: 17px; font-variant-numeric: tabular-nums; }
+/* 스코어카드 표기: 버디 ○, 이글 ◎, 보기 □, 더블보기 이상 ▣ */
+input.sc.bd { border-radius: 50%; border-color: var(--ink); background: var(--surface); }
+input.sc.eg { border-radius: 50%; border-color: var(--ink); background: var(--surface); box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 4px var(--ink); }
+input.sc.bg { border-radius: 2px; border-color: var(--ink); background: var(--surface); }
+input.sc.db { border-radius: 2px; border-color: var(--ink); background: var(--surface); box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 4px var(--ink); }
+td.res { font-family: var(--f-num); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+td.res .pa.win { color: var(--a); font-weight: 600; } td.res .pb.win { color: var(--b); font-weight: 600; }
+td.res .sep { margin: 0 2px; opacity: .55; }
+tr.sum th, tr.sum td { background: var(--field); font-family: var(--f-num); font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--line); padding: 7px 0; }
+tr.sum th { font-family: var(--f-body); font-size: 12px; }
+tr.sum.tot th, tr.sum.tot td { border-top: 2px solid var(--ink); font-size: 15px; }
+tr.sum .pa.win { color: var(--a); } tr.sum .pb.win { color: var(--b); }
+.legend { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.legend b { color: var(--ink); font-family: var(--f-num); }
+
+/* 버튼 */
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); font-weight: 500; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.btn[disabled] { opacity: .55; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr:focus-visible + label.btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.msg.err { color: var(--a); }
+
+/* 사진 */
+.panel { display: flex; flex-direction: column; gap: 10px; }
+.pv { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.pv img { max-width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; align-self: flex-start; }
+.pvtbl { overflow-x: auto; }
+.pvtbl table { min-width: 0; table-layout: auto; font-family: var(--f-num); font-size: 12px; }
+.pvtbl th, .pvtbl td { padding: 3px 5px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.pvtbl th:first-child, .pvtbl td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); font-family: var(--f-body); }
+.map { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.map label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 700; min-width: 0; }
+.map .la { color: var(--a); } .map .lb { color: var(--b); }
+.map select { height: 38px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; min-width: 0; }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.chk input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.step { font-weight: 700; font-size: 14px; }
+.seg-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg { min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 500; }
+.seg[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 700; }
+.seg[disabled] { opacity: .5; cursor: default; }
+.tboard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tcol { border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; min-height: 96px; min-width: 0; }
+.tcol.ta { background: var(--a-soft); } .tcol.tb { background: var(--b-soft); }
+.tcol > b { font-size: 12px; letter-spacing: 0.04em; }
+.tcol.ta > b { color: var(--a); } .tcol.tb > b { color: var(--b); }
+.chip { min-height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; min-width: 0; }
+button.chip { cursor: pointer; width: 100%; }
+.chip.a { border-left: 4px solid var(--a); } .chip.b { border-left: 4px solid var(--b); } .chip.n { border-style: dashed; width: auto; }
+.empty { color: var(--muted); font-size: 12px; }
+.pool { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); min-width: 0; }
+.cgrid label.full { grid-column: 1 / -1; }
+.cgrid select { height: 42px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; color: var(--ink); font-weight: 400; min-width: 0; }
+table.cc { min-width: 0; table-layout: auto; font-family: var(--f-num); font-size: 13px; }
+table.cc th, table.cc td { padding: 6px 7px; text-align: center; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.cc thead th { position: static; box-shadow: none; font-size: 11px; color: var(--muted); }
+table.cc tbody th { text-align: left; font-family: var(--f-body); font-weight: 700; position: sticky; left: 0; background: var(--surface); }
+table.cc tbody th small { display: block; font-size: 10px; color: var(--accent); }
+table.cc tr.on th, table.cc tr.on td { background: var(--field); }
+table.cc td.tot { font-weight: 600; }
+
+.pad { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
+  padding-top: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.pad[hidden] { display: none; }
+.pad-in { max-width: 560px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pad button { min-height: 50px; border: 1px solid var(--line); background: var(--field); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; cursor: pointer; }
+.pad button b { font-family: var(--f-num); font-size: 18px; font-weight: 600; line-height: 1.2; }
+.pad button i { font-style: normal; font-size: 11px; color: var(--muted); line-height: 1.2; }
+.pad button:active { background: var(--line); }
+body.pad-on { padding-bottom: 190px; }
+
+.guide-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; font-size: 14px; }
+.guide-body ol, .guide-body ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.guide-body li b { display: block; margin-bottom: 1px; }
+.guide-body h3 { font-family: var(--f-display); font-size: 14px; font-weight: 800; margin: 0 0 6px; }
+
+.editor { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.editor[hidden] { display: none; }
+.editor h3 { font-family: var(--f-display); font-size: 16px; font-weight: 800; margin: 0; }
+.fl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.fl input, .nine input.nn { height: 40px; padding: 0 10px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; min-width: 0; color: var(--ink); font-weight: 400; font-size: 15px; }
+.nine { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.nine:first-child { border-top: 0; padding-top: 0; }
+.nine-h { display: flex; align-items: center; gap: 8px; }
+.nine-h input.nn { flex: 1; }
+.nsum { font-family: var(--f-num); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.btn.sm { min-height: 36px; padding: 0 10px; font-size: 13px; }
+.nine select.srcsel { height: 36px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; color: var(--ink); font-size: 13px; }
+.par9 { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; }
+.par9 input { width: 100%; min-width: 0; height: 40px; padding: 0; text-align: center; background: var(--field); border: 1px solid var(--line); border-radius: 6px; font-family: var(--f-num); font-size: 16px; color: var(--ink); }
+.par9 input::placeholder { color: var(--muted); opacity: .5; }
+
+.imgout { display: flex; flex-direction: column; gap: 10px; }
+.imgout[hidden] { display: none; }
+.imgout img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #FFFFFF; display: block; }
+
+.cgrid input { height: 42px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--ink); font-family: var(--f-num); font-size: 15px; font-weight: 400; min-width: 0; width: 100%; }
+.rphoto { display: flex; flex-direction: column; gap: 8px; }
+.rp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rp-t { font-size: 12px; font-weight: 700; color: var(--muted); }
+.rp-list { display: flex; gap: 10px; }
+.rp-list:empty { display: none; }
+.rp-item { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.rp-item img { width: 100%; max-height: 150px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--field); }
+#rp-add[hidden] { display: none; }
+
+.filebtn { position: relative; overflow: hidden; cursor: pointer; }
+.filebtn input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hgrid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
+.hgrid button { min-height: 40px; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-family: var(--f-num); font-size: 15px; cursor: pointer; }
+.hgrid button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+.seg-row.two .seg { flex: 1 1 140px; }
+
+.dropz { min-height: 58px; border: 1.5px dashed var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; color: var(--muted); caret-color: transparent; outline: none; -webkit-user-select: text; user-select: text; }
+.dropz:empty::before { content: attr(data-ph); }
+.dropz:focus, .dropz.over { border-color: var(--accent); background: var(--field); }
+.dropz[hidden] { display: none; }
+
+/* 규칙 */
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+summary { padding: 12px 14px; font-family: var(--f-display); font-weight: 800; font-size: 17px; cursor: pointer; }
+.rules { padding: 0 14px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rules label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--muted); min-width: 0; }
+.rules input, .rules select { height: 40px; padding: 0 10px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; font-family: var(--f-num); color: var(--ink); min-width: 0; font-weight: 400; }
+.rules select { font-family: var(--f-body); }
+.rules .full { grid-column: 1 / -1; }
+.rules .note { grid-column: 1 / -1; font-size: 12px; color: var(--muted); font-weight: 400; }
+#copybox { width: 100%; min-height: 150px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-family: var(--f-body); font-size: 13px; }
+</style>
+
+</head><body><div class="wrap">
+  <header>
+    <h1>홀매치 스코어보드</h1>
+    <p class="lede" id="ruleLine"></p>
+    <p class="lede" id="courseLine" hidden></p>
+  </header>
+
+  <div class="example" id="exampleNote">
+    <span>지금 보이는 점수는 예시입니다.</span>
+    <button class="btn" id="clearExample" type="button">지우고 새로 시작</button>
+  </div>
+
+  <details class="guide">
+    <summary>사용 설명서</summary>
+    <div class="guide-body">
+      <ol>
+        <li><b>게임 정하기</b> 「게임 설정」에서 하이로우 홀매치와 팀합산 홀매치 중 하나를 고르고, 버디·이글 가산점과 배판 홀을 경기 전에 정해 둡니다.</li>
+        <li><b>골프장 고르기</b> 「골프장 · 코스」에서 골프장과 전반·후반 코스를 고르면 홀별 파가 표에 채워집니다. 목록에 없으면 「골프장 추가」에서 이름과 코스별 파를 적어 저장합니다. 파가 적힌 카드를 사진으로 읽어 채울 수도 있습니다. 저장한 골프장은 「이 골프장 수정」으로 고칠 수 있습니다.</li>
+        <li><b>선수 이름 쓰기</b> A팀 두 명, B팀 두 명의 이름을 적습니다. 사진으로 시작하면 이름은 사진에서 가져옵니다. 「라운드 정보」에서 날짜와 티오프 시간을 넣고 동반자 단체 사진을 올릴 수 있습니다.</li>
+        <li><b>점수 입력</b> 「홀별 스코어」에서 입력 방식을 고릅니다. 총 타수는 4, 5처럼 치고, 파 대비는 0, -1, +1처럼 파를 뺀 숫자를 칩니다. 한 홀에 네 명의 점수가 모두 들어가면 그 홀 결과가 바로 나옵니다.</li>
+        <li><b>사진으로 입력</b> 스코어카드를 찍어 올리면 이름과 타수를 읽습니다. 경기 도중에 찍어도 되고, 적힌 홀까지만 기록하며 빈 홀은 그대로 둡니다. 카트 태블릿처럼 9홀씩 보이는 카드도 읽습니다. 전반인지 후반인지 확인한 뒤 그 9홀만 채우고, 전반 사진과 후반 사진을 따로 올려도 됩니다. 두 번째 사진부터는 이름이 같은 선수를 같은 자리에 기록합니다. 읽은 뒤 팀을 정하고(추첨, 밸런스, 직접), 채운 뒤에는 사진과 표를 비교해 틀린 칸을 고쳐 주세요.</li>
+        <li><b>결과 확인과 공유</b> 맨 위 점수판에 팀 점수와 점수 차가 나옵니다. 「결과 복사」를 누르면 홀별 점수까지 글로 복사되어 단체 대화방에 붙여 넣을 수 있고, 「스코어카드 이미지 만들기」를 누르면 골프 앱의 스코어카드처럼 파 대비 타수 표를 담은 이미지를 만들어 저장할 수 있습니다. 대표 선수는 「라운드 정보」에서 고르고, 올린 사진(최대 2장)은 표 위에 함께 들어갑니다.</li>
+      </ol>
+      <div>
+        <h3>점수 계산</h3>
+        <ul>
+          <li><b>하이로우 홀매치</b> 각 홀에서 팀별로 잘 친 사람끼리, 못 친 사람끼리 비교합니다. 이기면 1점, 같으면 0점입니다. 둘 다 이기면 2점이고, 하나씩 나누면 비깁니다.</li>
+          <li><b>팀합산 홀매치</b> 각 홀에서 팀 두 명의 타수를 더해 합이 낮은 팀이 1점을 얻습니다. 합이 같으면 비깁니다.</li>
+          <li>버디와 이글 가산점, 배판 홀과 배수는 「게임 설정」에서 바꿉니다. 배판 홀은 가산점까지 합한 점수에 배수를 곱합니다.</li>
+          <li>표에서 ○는 버디, ◎는 이글, □는 보기입니다.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>알아 둘 점</h3>
+        <ul>
+          <li>입력한 점수와 저장한 골프장은 이 휴대폰의 브라우저에만 남고 다른 사람과 공유되지 않습니다.</li>
+          <li>사진 인식은 Claude 안에서 연 화면에서만 됩니다. 내려받은 파일에서는 직접 입력해 주세요.</li>
+          <li>「점수 모두 지우기」는 한 번 더 눌러야 지워집니다. 선수 이름과 규칙은 그대로 둡니다.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+
+  <section class="board" aria-live="polite" aria-label="점수판">
+    <div class="team ta"><div class="tl">A팀</div><div class="pl" id="plA"></div><div class="big" id="totA">0</div><div class="sub" id="subA"></div></div>
+    <div class="team tb"><div class="tl">B팀</div><div class="pl" id="plB"></div><div class="big" id="totB">0</div><div class="sub" id="subB"></div></div>
+    <div class="status"><span id="status"></span><span class="money" id="money"></span></div>
+  </section>
+
+  <section class="panel" id="gameSec" aria-label="게임 설정">
+    <h2>게임 설정</h2>
+    <p class="hint">경기 시작 전에 정해 두세요.</p>
+    <div class="seg-row two" role="group" aria-label="게임 방식">
+      <button class="seg" id="g-highlow" type="button" aria-pressed="true">하이로우 홀매치</button>
+      <button class="seg" id="g-teamsum" type="button" aria-pressed="false">팀합산 홀매치</button>
+    </div>
+    <p class="hint" id="gameDesc"></p>
+    <div class="cgrid">
+      <label>버디 가산점<select id="r-birdie"></select></label>
+      <label>이글 가산점<select id="r-eagle"></select></label>
+      <label class="full">가산점 적용 방식
+        <select id="r-mode"><option value="win"></option><option value="always"></option></select>
+      </label>
+    </div>
+    <div class="rphoto">
+      <div class="rp-head"><span class="rp-t">배판 홀 (눌러서 선택·해제)</span><span class="hint" id="dblSummary"></span></div>
+      <div class="hgrid" id="hgrid"></div>
+      <div class="cgrid">
+        <label>배판 배수<select id="r-mult"></select></label>
+        <label>점당 금액(원, 선택)<input id="r-stake" type="text" inputmode="numeric" maxlength="7" autocomplete="off" placeholder="0"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="선수">
+    <div class="players">
+      <div class="pgroup ga"><span>A팀</span>
+        <input class="name" id="nm-0" type="text" maxlength="8" autocomplete="off" aria-label="A팀 선수 1 이름">
+        <input class="name" id="nm-1" type="text" maxlength="8" autocomplete="off" aria-label="A팀 선수 2 이름"></div>
+      <div class="pgroup gb"><span>B팀</span>
+        <input class="name" id="nm-2" type="text" maxlength="8" autocomplete="off" aria-label="B팀 선수 1 이름">
+        <input class="name" id="nm-3" type="text" maxlength="8" autocomplete="off" aria-label="B팀 선수 2 이름"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="골프장과 코스">
+    <h2>골프장 · 코스</h2>
+    <p class="hint">저장해 둔 골프장을 고르면 코스별 홀 파가 표에 채워집니다.</p>
+    <div class="cgrid">
+      <label class="full">골프장<select id="c-club"></select></label>
+      <label>전반 코스<select id="c-front"></select></label>
+      <label>후반 코스<select id="c-back"></select></label>
+    </div>
+    <div id="cardPreview"></div>
+    <p class="msg" id="courseMsg" aria-live="polite"></p>
+    <div class="row">
+      <button class="btn" id="c-add" type="button">골프장 추가</button>
+      <button class="btn" id="c-edit" type="button" hidden>이 골프장 수정</button>
+      <button class="btn" id="c-del" type="button" hidden>이 골프장 삭제</button>
+      <button class="btn" id="c-share" type="button">내 골프장 옮기기</button>
+    </div>
+    <div class="editor" id="delBox" hidden>
+      <p><b id="delName"></b> 골프장을 삭제할까요? 삭제하면 되돌릴 수 없습니다.</p>
+      <div class="row"><button class="btn primary" id="del-yes" type="button">삭제</button><button class="btn" id="del-no" type="button">취소</button></div>
+    </div>
+    <div class="editor" id="clubShare" hidden>
+      <h3>내 골프장 옮기기</h3>
+      <p class="hint">직접 추가한 골프장은 PC와 휴대폰이 서로 따로 저장됩니다. 한쪽에서 「코드 만들기」로 만든 글을 복사해 카카오톡 나에게 보내기 등으로 옮긴 뒤, 다른 쪽에서 아래 칸에 붙여넣고 「가져오기」를 누르세요.</p>
+      <textarea id="sh-text" rows="5" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px;border:1px solid var(--line,#ccc);border-radius:8px;background:var(--surface,#fff);color:inherit" placeholder="여기에 코드가 나타나거나, 붙여넣을 코드를 넣으세요"></textarea>
+      <div class="row">
+        <button class="btn" id="sh-make" type="button">코드 만들기</button>
+        <button class="btn" id="sh-copy" type="button">복사</button>
+        <button class="btn primary" id="sh-import" type="button">가져오기</button>
+        <button class="btn" id="sh-close" type="button">닫기</button>
+      </div>
+      <p class="msg" id="sh-msg" aria-live="polite"></p>
+    </div>
+    <div class="editor" id="clubEditor" hidden>
+      <h3 id="edTitle">골프장 추가</h3>
+      <label class="fl">골프장 이름<input id="ed-name" type="text" maxlength="20" autocomplete="off" placeholder="예: 우리 동네 CC"></label>
+      <div id="edRows"></div>
+      <div class="row">
+        <button class="btn" id="ed-addnine" type="button">코스(9홀) 추가</button>
+        <span id="edPhotoWrap" hidden>
+          <label class="btn filebtn">카드 사진으로 파 읽기<input id="ed-photo" type="file" accept="image/*"></label>
+        </span>
+      </div>
+      <p class="hint">코스마다 이름과 1~9번 홀 파를 적습니다. 18홀이면 코스 두 개, 27홀이면 세 개를 넣습니다. 같은 이름의 골프장에 코스를 더하려면 같은 이름으로 저장하세요. 저장한 내용은 이 휴대폰에만 남습니다.</p>
+      <p class="msg" id="edMsg" aria-live="polite"></p>
+      <div class="row">
+        <button class="btn primary" id="ed-save" type="button">저장</button>
+        <button class="btn" id="ed-cancel" type="button">닫기</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="라운드 정보">
+    <h2>라운드 정보</h2>
+    <div class="cgrid">
+      <label>날짜<input id="round-date" type="date"></label>
+      <label>티오프 시간<input id="round-tee" type="time"></label>
+      <label class="full">스코어카드 이미지 대표 선수 (오른쪽 위에 크게 표시)<select id="round-main"></select></label>
+    </div>
+    <div class="rphoto">
+      <div class="rp-head"><span class="rp-t">라운드 사진 (동반자·풍경 등, 최대 2장)</span><span class="hint">선택 사항</span></div>
+      <div class="rp-list" id="rp-list"></div>
+      <div class="row">
+        <label class="btn filebtn" id="rp-add"><span id="rp-labeltxt">사진 올리기</span><input id="rp-file" type="file" accept="image/*" multiple></label>
+        <div class="hint" style="margin-top:6px">위 버튼이 안 열리면 여기를 눌러 보세요: <input id="rp-file2" type="file" accept="image/*" multiple></div>
+      </div>
+      <div class="dropz" id="rp-drop" contenteditable="true" inputmode="none" spellcheck="false" role="textbox" aria-label="사진을 붙여넣는 칸" data-ph="사진 선택창이 열리지 않으면 사진을 복사한 뒤 이 칸을 길게 눌러 붙여넣으세요. 컴퓨터에서는 사진을 끌어다 놓아도 됩니다."></div>
+      <p class="hint">올린 사진은 스코어카드 이미지에 함께 들어갑니다. 한 장이면 크게, 두 장이면 나란히 배치합니다. 사진은 Claude로 보내지지 않고 이 휴대폰 안에서만 처리됩니다.</p>
+      <p class="msg" id="rp-msg" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="홀별 스코어카드">
+    <h2>홀별 스코어</h2>
+    <div class="seg-row" role="group" aria-label="점수 입력 방식">
+      <button class="seg" id="im-stroke" type="button" aria-pressed="true">총 타수로 입력</button>
+      <button class="seg" id="im-rel" type="button" aria-pressed="false">파 대비로 입력</button>
+    </div>
+    <p class="hint" id="imHint"></p>
+    <div class="tbl-wrap score">
+      <table>
+        <colgroup><col style="width:11%"><col style="width:11%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:15%"><col style="width:18%"></colgroup>
+        <thead><tr>
+          <th scope="col">홀</th><th scope="col">파</th>
+          <th class="ha" scope="col"><span id="hd-0"></span></th><th class="ha" scope="col"><span id="hd-1"></span></th>
+          <th class="hb" scope="col"><span id="hd-2"></span></th><th class="hb" scope="col"><span id="hd-3"></span></th>
+          <th scope="col">A : B</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="legend"><span><b>○</b> 버디</span><span><b>◎</b> 이글</span><span><b>□</b> 보기</span><span><b>▣</b> 더블보기 이상</span><span id="legendHint"></span></p>
+  </section>
+
+  <section class="panel" id="photoSec" aria-label="사진으로 입력">
+    <h2>스코어카드 사진으로 입력</h2>
+    <p class="hint" id="photoHint">사진 인식을 준비하고 있습니다.</p>
+    <div class="row" id="photoRow" hidden>
+      <label class="btn primary filebtn">사진 선택<input id="photo" type="file" accept="image/*"></label>
+      <button class="btn" id="photoStop" type="button" hidden>중지</button>
+    </div>
+    <div class="dropz" id="photo-drop" contenteditable="true" inputmode="none" spellcheck="false" role="textbox" aria-label="스코어카드 사진을 붙여넣는 칸" data-ph="사진 선택창이 열리지 않으면 스코어카드 사진을 복사한 뒤 이 칸을 길게 눌러 붙여넣으세요. 컴퓨터에서는 사진을 끌어다 놓아도 됩니다." hidden></div>
+    <p class="msg" id="photoMsg" aria-live="polite"></p>
+    <div id="photoResult"></div>
+  </section>
+
+
+  <section class="panel" aria-label="결과 내보내기">
+    <div class="row">
+      <button class="btn primary" id="imgBtn" type="button">스코어카드 이미지 만들기</button>
+      <button class="btn" id="copyBtn" type="button">결과 복사</button>
+      <button class="btn" id="resetBtn" type="button">점수 모두 지우기</button>
+    </div>
+    <p class="msg" id="actMsg" aria-live="polite"></p>
+    <textarea id="copybox" readonly hidden aria-label="복사할 결과"></textarea>
+    <div class="imgout" id="imgOut" hidden>
+      <img id="cardImg" alt="완성된 스코어카드 이미지">
+      <div class="row"><button class="btn primary" id="imgSave" type="button">이미지 저장</button></div>
+      <p class="msg" id="imgMsg" aria-live="polite"></p>
+    </div>
+  </section>
+</div>
+
+<div class="pad" id="pad" hidden role="group" aria-label="파 대비 빠른 입력">
+  <div class="pad-in">
+    <button type="button" data-v="-2"><b>-2</b><i>이글</i></button>
+    <button type="button" data-v="-1"><b>-1</b><i>버디</i></button>
+    <button type="button" data-v="0"><b>0</b><i>파</i></button>
+    <button type="button" data-v="1"><b>+1</b><i>보기</i></button>
+    <button type="button" data-v="2"><b>+2</b><i>더블</i></button>
+    <button type="button" data-v="3"><b>+3</b><i>트리플</i></button>
+    <button type="button" data-v="4"><b>+4</b><i>쿼드</i></button>
+    <button type="button" data-v="clear"><b>지움</b><i>이 칸</i></button>
+  </div>
+</div>
+
+<script>
+/*LOGIC-START*/
+const NH = 18;
+const DEFAULT_PAR = [4,4,3,5,4,4,3,4,5, 4,4,3,5,4,4,3,4,5];
+
+function parseHoles(str) {
+  return String(str || '').split(/[^0-9]+/).map(Number).filter(n => n >= 1 && n <= NH);
+}
+function bonusOf(diff, r) {
+  if (diff <= -2) return r.eagle;
+  if (diff === -1) return r.birdie;
+  return 0;
+}
+// 한 홀 계산. 네 명의 타수가 모두 있어야 결과를 낸다.
+function holeCalc(h, st) {
+  const sc = st.scores[h];
+  if (sc.some(v => v == null)) return null;
+  const par = st.par[h], r = st.rules;
+  const mult = parseHoles(r.doubleHoles).includes(h + 1) ? r.mult : 1;
+  if (r.game === 'teamsum') {
+    // 팀합산: 두 명의 타수 합이 낮은 팀이 1점
+    const sa = sc[0] + sc[1], sb = sc[2] + sc[3];
+    let ta = 0, tb = 0;
+    if (sa !== sb) {
+      const aWins = sa < sb;
+      const win = aWins ? [sc[0], sc[1]] : [sc[2], sc[3]];
+      const pts = 1 + (r.mode === 'win' ? win.reduce((x, v) => x + bonusOf(v - par, r), 0) : 0);
+      if (aWins) ta += pts; else tb += pts;
+    }
+    if (r.mode === 'always') sc.forEach((v, i) => { const bo = bonusOf(v - par, r); if (i < 2) ta += bo; else tb += bo; });
+    return { a: ta * mult, b: tb * mult, mult };
+  }
+  const A = [sc[0], sc[1]].sort((x, y) => x - y);
+  const B = [sc[2], sc[3]].sort((x, y) => x - y);
+  let a = 0, b = 0;
+  for (let i = 0; i < 2; i++) {
+    if (A[i] === B[i]) continue;
+    const aWins = A[i] < B[i];
+    const winScore = aWins ? A[i] : B[i];
+    const pts = 1 + (r.mode === 'win' ? bonusOf(winScore - par, r) : 0);
+    if (aWins) a += pts; else b += pts;
+  }
+  if (r.mode === 'always') {
+    sc.forEach((v, i) => { const bo = bonusOf(v - par, r); if (i < 2) a += bo; else b += bo; });
+  }
+  return { a: a * mult, b: b * mult, mult };
+}
+function totals(st) {
+  const t = { out: [0, 0], in: [0, 0], tot: [0, 0], done: 0 };
+  for (let h = 0; h < NH; h++) {
+    const c = holeCalc(h, st);
+    if (!c) continue;
+    const k = h < 9 ? 'out' : 'in';
+    t[k][0] += c.a; t[k][1] += c.b; t.tot[0] += c.a; t.tot[1] += c.b; t.done++;
+  }
+  return t;
+}
+/*LOGIC-END*/
+
+const KEY = 'holematch-v1';
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const emptyScores = () => Array.from({ length: NH }, () => [null, null, null, null]);
+const defaultRules = () => ({ game: 'highlow', birdie: 1, eagle: 3, mult: 2, doubleHoles: '9, 18', mode: 'win', stake: 0 });
+const GAME_NAMES = { highlow: '하이로우 홀매치', teamsum: '팀합산 홀매치' };
+const gameName = r => GAME_NAMES[r && r.game] || GAME_NAMES.highlow;
+
+// 예시 경기(작성용 샘플). 새로 시작하면 지워진다.
+const EXAMPLE = [
+  [4,5,5,6],[5,6,4,6],[3,4,3,5],[3,5,5,5],[5,5,4,6],[4,6,5,5],[3,4,2,4],[4,5,4,5],[5,6,4,6],
+  [4,5,5,5],[5,5,4,5],[3,4,4,4],[5,6,5,7],[5,5,3,5],[4,6,5,5],[3,5,3,4],[4,5,5,6],[5,5,5,6]
+];
+function exampleState() {
+  return { names: ['A1', 'A2', 'B1', 'B2'], par: DEFAULT_PAR.slice(), scores: EXAMPLE.map(r => r.slice()), rules: defaultRules(), course: { clubId: '', front: 0, back: 1 }, inputMode: 'stroke', round: { date: '', tee: '' }, example: true };
+}
+
+let st = load() || exampleState();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !Array.isArray(s.scores) || s.scores.length !== NH || !Array.isArray(s.par) || s.par.length !== NH) return null;
+    s.names = Array.isArray(s.names) && s.names.length === 4 ? s.names : ['A1', 'A2', 'B1', 'B2'];
+    s.rules = Object.assign(defaultRules(), s.rules || {});
+    s.course = Object.assign({ clubId: '', front: 0, back: 1 }, s.course || {});
+    s.inputMode = s.inputMode === 'rel' ? 'rel' : 'stroke';
+    s.round = Object.assign({ date: '', tee: '', main: 0 }, s.round || {});
+    return s;
+  } catch (e) { return null; }
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+
+const TEAM_LABEL = ['A팀 선수 1', 'A팀 선수 2', 'B팀 선수 1', 'B팀 선수 2'];
+
+function sumRow(key, label) {
+  return `<tr class="sum ${key}"><th scope="row">${label}</th><td id="sum-${key}-par"></td>` +
+    [0, 1, 2, 3].map(p => `<td id="sum-${key}-${p}"></td>`).join('') + `<td id="sum-${key}-res"></td></tr>`;
+}
+function buildTable() {
+  let html = '';
+  for (let h = 0; h < NH; h++) {
+    html += `<tr class="hole"><th scope="row" class="hn">${h + 1}<i id="dbl-${h}"></i></th>` +
+      `<td><input class="par" id="par-${h}" data-h="${h}" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="${h + 1}번 홀 파"></td>` +
+      [0, 1, 2, 3].map(p => `<td><input class="sc" id="s-${h}-${p}" data-h="${h}" data-p="${p}" type="text" inputmode="numeric" maxlength="2" autocomplete="off" aria-label="${h + 1}번 홀 ${TEAM_LABEL[p]} 타수"></td>`).join('') +
+      `<td class="res" id="res-${h}"></td></tr>`;
+    if (h === 8) html += sumRow('out', '전반');
+    if (h === 17) html += sumRow('in', '후반');
+  }
+  html += sumRow('tot', '합계');
+  $('#tbody').innerHTML = html;
+}
+
+function sync() {
+  for (let p = 0; p < 4; p++) $('#nm-' + p).value = st.names[p];
+  for (let h = 0; h < NH; h++) {
+    $('#par-' + h).value = st.par[h];
+    for (let p = 0; p < 4; p++) $('#s-' + h + '-' + p).value = cellText(h, p);
+  }
+  $('#round-date').value = st.round.date || ''; $('#round-tee').value = st.round.tee || ''; mainKey = ''; refreshMainSelect();
+  const r = st.rules;
+  applyRulesUI();
+}
+
+function pairName(i) { return (st.names[i] || '') + ' · ' + (st.names[i + 1] || ''); }
+const fmt = n => Number(n).toLocaleString('ko-KR');
+
+function update() {
+  const r = st.rules, dh = parseHoles(r.doubleHoles);
+  const strokes = { out: [0, 0, 0, 0], in: [0, 0, 0, 0], tot: [0, 0, 0, 0] };
+  const parSum = { out: 0, in: 0, tot: 0 };
+  const cnt = { out: [0, 0, 0, 0], in: [0, 0, 0, 0], tot: [0, 0, 0, 0] };
+  const rel = { out: [0, 0, 0, 0], in: [0, 0, 0, 0], tot: [0, 0, 0, 0] };
+  for (let h = 0; h < NH; h++) {
+    const k = h < 9 ? 'out' : 'in';
+    parSum[k] += st.par[h]; parSum.tot += st.par[h];
+    $('#dbl-' + h).textContent = dh.includes(h + 1) && r.mult > 1 ? '배판' : '';
+    const c = holeCalc(h, st);
+    const el = $('#res-' + h);
+    el.innerHTML = c ? `<span class="pa ${c.a > c.b ? 'win' : ''}">${c.a}</span><span class="sep">:</span><span class="pb ${c.b > c.a ? 'win' : ''}">${c.b}</span>` : '–';
+    for (let p = 0; p < 4; p++) {
+      const v = st.scores[h][p], inp = $('#s-' + h + '-' + p);
+      inp.classList.remove('bd', 'eg', 'bg', 'db');
+      if (v != null) {
+        strokes[k][p] += v; strokes.tot[p] += v; cnt[k][p]++; cnt.tot[p]++;
+        rel[k][p] += v - st.par[h]; rel.tot[p] += v - st.par[h];
+        const d = v - st.par[h];
+        if (d <= -2) inp.classList.add('eg'); else if (d === -1) inp.classList.add('bd');
+        else if (d === 1) inp.classList.add('bg'); else if (d >= 2) inp.classList.add('db');
+      }
+    }
+  }
+  const t = totals(st);
+  for (const k of ['out', 'in', 'tot']) {
+    $(`#sum-${k}-par`).textContent = parSum[k];
+    for (let p = 0; p < 4; p++) $(`#sum-${k}-${p}`).textContent = cnt[k][p] ? (st.inputMode === 'rel' ? relText(rel[k][p]) : strokes[k][p]) : '–';
+    const [a, b] = t[k];
+    $(`#sum-${k}-res`).innerHTML = `<span class="pa ${a > b ? 'win' : ''}">${a}</span> : <span class="pb ${b > a ? 'win' : ''}">${b}</span>`;
+  }
+  for (let p = 0; p < 4; p++) $('#hd-' + p).textContent = st.names[p] || ['A1', 'A2', 'B1', 'B2'][p];
+  $('#plA').textContent = pairName(0); $('#plB').textContent = pairName(2);
+  $('#totA').textContent = t.tot[0]; $('#totB').textContent = t.tot[1];
+  $('#subA').textContent = `전반 ${t.out[0]} · 후반 ${t.in[0]}`;
+  $('#subB').textContent = `전반 ${t.out[1]} · 후반 ${t.in[1]}`;
+  const diff = t.tot[0] - t.tot[1];
+  let s;
+  if (!t.done) s = '네 명의 타수를 입력하면 바로 집계됩니다';
+  else if (diff > 0) s = `<b style="color:var(--a)">A팀 +${diff}</b> ${t.done === NH ? '승' : '앞섬'} · ${t.done}/${NH}홀`;
+  else if (diff < 0) s = `<b style="color:var(--b)">B팀 +${-diff}</b> ${t.done === NH ? '승' : '앞섬'} · ${t.done}/${NH}홀`;
+  else s = `<b>동점</b> · ${t.done}/${NH}홀`;
+  $('#status').innerHTML = s;
+  const stake = Number(r.stake) || 0;
+  $('#money').textContent = stake > 0 && diff !== 0 ? `${Math.abs(diff)}점 × ${fmt(stake)}원 = ${fmt(Math.abs(diff) * stake)}원` : '';
+  $('#ruleLine').textContent = `${gameName(r)} · ${r.birdie ? '버디 +' + r.birdie : '버디 가산 없음'} · ${r.eagle ? '이글 +' + r.eagle : '이글 가산 없음'} · ${dh.length ? dh.join('·') + '번 홀 ' + r.mult + '배' : '배판 없음'}`;
+  $('#exampleNote').hidden = !st.example;
+  refreshMainSelect();
+  const cl = courseLabel();
+  $('#courseLine').hidden = !cl; $('#courseLine').textContent = cl;
+  save();
+}
+
+function toInt(s, lo, hi) {
+  const n = parseInt(String(s).replace(/[^0-9]/g, ''), 10);
+  return Number.isFinite(n) && n >= lo && n <= hi ? n : null;
+}
+
+/* 입력 이벤트 */
+const scInputs = () => Array.from(document.querySelectorAll('input.sc'));
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.classList.contains('sc')) {
+    onScoreInput(t);
+  } else if (t.classList.contains('par')) {
+    t.value = t.value.replace(/[^0-9]/g, '');
+    const v = toInt(t.value, 3, 6);
+    if (v != null) {
+      st.par[+t.dataset.h] = v;
+      if (st.inputMode === 'rel') for (let q = 0; q < 4; q++) $('#s-' + t.dataset.h + '-' + q).value = cellText(+t.dataset.h, q);
+      if (st.course.clubId) { st.course.clubId = ''; renderCourse(); }
+      update();
+    }
+  } else if (t.id.startsWith('nm-')) {
+    st.names[+t.id.slice(3)] = t.value.trim(); update();
+  } else if (t.id.startsWith('r-')) {
+    readRules();
+  }
+});
+document.addEventListener('focusin', e => {
+  const t = e.target;
+  if (!t.classList) return;
+  if (t.classList.contains('sc') || t.classList.contains('par')) t.select();
+  if (t.classList.contains('sc')) {
+    lastCell = t;
+    showPad(true);
+    if (st.inputMode === 'rel') t.scrollIntoView({ block: 'center' });
+  } else if (!t.closest('#pad')) {
+    showPad(false);
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('sc')) t.value = cellText(+t.dataset.h, +t.dataset.p);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('sc')) {
+    e.preventDefault();
+    const all = scInputs(), i = all.indexOf(e.target);
+    if (all[i + 1]) all[i + 1].focus();
+  }
+});
+function readRules() {
+  const r = st.rules;
+  const b = toInt($('#r-birdie').value, 0, 99), g = toInt($('#r-eagle').value, 0, 99), m = toInt($('#r-mult').value, 1, 9);
+  if (b != null) r.birdie = b;
+  if (g != null) r.eagle = g;
+  if (m != null) r.mult = m;
+  r.mode = $('#r-mode').value === 'always' ? 'always' : 'win';
+  r.stake = toInt($('#r-stake').value, 0, 9999999) || 0;
+  update();
+}
+
+/* 예시 지우기, 전체 지우기 */
+function clearScores() { st.scores = emptyScores(); st.example = false; st.round = { date: todayStr(), tee: '', main: Number(st.round.main) || 0 }; clearRoundPhotos(); sync(); update(); }
+$('#clearExample').addEventListener('click', () => {
+  st.names = ['', '', '', '']; st.par = DEFAULT_PAR.slice();
+  st.course = { clubId: '', front: 0, back: 1 };
+  clearScores(); renderCourse();
+  $('#nm-0').focus();
+});
+let resetArmed = null;
+$('#resetBtn').addEventListener('click', e => {
+  const b = e.currentTarget;
+  if (!resetArmed) {
+    b.textContent = '한 번 더 누르면 모두 지웁니다';
+    resetArmed = setTimeout(() => { resetArmed = null; b.textContent = '점수 모두 지우기'; }, 4000);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = null; b.textContent = '점수 모두 지우기';
+  clearScores();
+  $('#actMsg').textContent = '점수를 모두 지웠습니다. 선수 이름과 규칙은 그대로입니다.';
+});
+
+/* 결과 복사 */
+function resultText() {
+  const t = totals(st), diff = t.tot[0] - t.tot[1], r = st.rules;
+  const nm = i => (st.names[i] || ['A1', 'A2', 'B1', 'B2'][i]);
+  const lines = [];
+  lines.push('2026사공회부경전 ' + gameName(st.rules) + ' 결과');
+  if (courseLabel()) lines.push(courseLabel());
+  const ri = roundInfo(); if (ri) lines.push(ri);
+  lines.push(`A팀(${nm(0)}·${nm(1)}) ${t.tot[0]} : ${t.tot[1]} B팀(${nm(2)}·${nm(3)})`);
+  lines.push(diff === 0 ? `동점 (${t.done}/${NH}홀)` : `${diff > 0 ? 'A팀' : 'B팀'} +${Math.abs(diff)} ${t.done === NH ? '승' : '앞섬'} (${t.done}/${NH}홀)`);
+  lines.push(`전반 ${t.out[0]}:${t.out[1]} / 후반 ${t.in[0]}:${t.in[1]}`);
+  const per = [];
+  for (let h = 0; h < NH; h++) { const c = holeCalc(h, st); if (c) per.push(`${h + 1}번 ${c.a}:${c.b}`); }
+  if (per.length) lines.push('홀별 ' + per.join(', '));
+  const stake = Number(r.stake) || 0;
+  if (stake > 0 && diff !== 0) lines.push(`${Math.abs(diff)}점 × ${fmt(stake)}원 = ${fmt(Math.abs(diff) * stake)}원`);
+  return lines.join('\n');
+}
+$('#copyBtn').addEventListener('click', async () => {
+  const text = resultText(), box = $('#copybox');
+  try {
+    await navigator.clipboard.writeText(text);
+    box.hidden = true;
+    $('#actMsg').textContent = '결과를 복사했습니다. 단체 대화방에 붙여 넣으세요.';
+  } catch (e) {
+    box.value = text; box.hidden = false; box.focus(); box.select();
+    $('#actMsg').textContent = '자동 복사가 되지 않았습니다. 아래 글을 길게 눌러 복사하세요.';
+  }
+});
+
+/* 사진 인식 */
+let photo = null;
+(async function initPhoto() {
+  const hint = $('#photoHint');
+  try {
+    const sample = window.claude && window.claude.use ? await window.claude.use('sample') : null;
+    const lim = sample ? await sample.limits().catch(() => null) : null;
+    if (!sample || !lim || !lim.images) {
+      hint.textContent = '이 화면에서는 사진 인식을 쓸 수 없습니다. 표에 직접 입력해 주세요.';
+      return;
+    }
+    hint.textContent = '스코어카드를 찍어 올리면 Claude가 이름과 타수를 읽고, 팀을 정한 뒤 표에 채웁니다. 손글씨는 틀릴 수 있어 채운 뒤 표에서 확인하세요.';
+    $('#photo').accept = lim.images.mediaTypes.join(',');
+    sampleApi = sample; $('#ed-photo').accept = lim.images.mediaTypes.join(','); $('#edPhotoWrap').hidden = false;
+    $('#photoRow').hidden = false;
+    let ctl = null;
+    $('#photoStop').addEventListener('click', () => ctl && ctl.abort());
+    async function runScoreFile(file) {
+      ctl = new AbortController();
+      $('#photoResult').innerHTML = '';
+      const msg = $('#photoMsg'); msg.className = 'msg'; msg.textContent = '스코어카드를 읽는 중입니다. 잠시만 기다려 주세요.';
+      $('#photoStop').hidden = false;
+      try {
+        const data = await sample.json(PROMPT, { images: file, signal: ctl.signal, modelTier: 'default' });
+        const rows = normalizePhoto(data);
+        if (!rows.players.length) throw { code: 'empty' };
+        showPhotoResult(rows, file);
+      } catch (err) {
+        msg.className = 'msg err';
+        msg.textContent = photoError(err && err.code);
+      } finally {
+        $('#photoStop').hidden = true;
+      }
+    }
+    $('#photo').addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try { await runScoreFile(file); } finally { e.target.value = ''; }
+    });
+    attachImageDrop($('#photo-drop'), runScoreFile, () => { const m = $('#photoMsg'); m.className = 'msg err'; m.textContent = '붙여넣은 내용에 사진이 없습니다. 사진을 먼저 복사해 주세요.'; });
+    $('#photo-drop').hidden = false;
+    $('#photoRow').hidden = false;
+  } catch (e) {
+    hint.textContent = '이 화면에서는 사진 인식을 쓸 수 없습니다. 표에 직접 입력해 주세요.';
+  }
+})();
+
+const PROMPT = [
+  '첨부한 사진은 골프 스코어카드입니다. 카트 태블릿 화면일 수도 있습니다. 타수를 읽어 JSON 하나로만 답하세요.',
+  '형식: {"unit":18 또는 9,"startHole":1 또는 10 또는 null,"courseName":"","par":[unit개],"players":[{"name":"이름","scores":[unit개]}]}',
+  '규칙:',
+  '- 카드가 18홀 전체를 보여 주면 unit은 18이고 배열은 1번부터 18번 홀 순서입니다.',
+  '- 카드가 9홀 단위(전반 또는 후반 한 화면, 또는 한 코스의 9홀)만 보여 주면 unit은 9이고 배열은 그 9홀의 순서입니다.',
+  '- unit이 9일 때 카드의 홀 번호가 10~18이거나 후반, IN 표기가 있으면 startHole은 10, 홀 번호가 1~9이거나 전반, OUT 표기가 있으면 1입니다. 알 수 없으면 null입니다.',
+  '- courseName은 카드에 코스 이름(예: 미국, 유럽)이 보이면 그대로, 없으면 빈 문자열입니다.',
+  '- 합계(OUT, IN, TOTAL), 핸디캡, 순위 칸은 넣지 마세요.',
+  '- 비어 있거나 읽을 수 없는 칸은 추측하지 말고 null로 두세요.',
+  '- 경기 도중에 찍은 사진일 수 있습니다. 아직 치지 않아 비어 있는 홀은 모두 null로 두고, 한 홀에서 일부 선수만 적혀 있으면 적힌 값만 넣고 나머지는 null로 두세요.',
+  '- players는 사진의 위에서 아래 순서입니다. 이름이 보이지 않으면 빈 문자열로 두세요.',
+  '- 타수가 아직 없고 이름만 적힌 카드면 scores는 모두 null로 두세요.',
+  '- par는 카드에 파 정보가 보일 때만 숫자로, 아니면 모두 null로 두세요.',
+  '- 숫자는 정수입니다.'
+].join('\n');
+
+function normalizePhoto(d) {
+  const unit = d && Number(d.unit) === 9 ? 9 : 18;
+  const list = Array.isArray(d) ? d : (d && Array.isArray(d.players) ? d.players : []);
+  const players = list.slice(0, 8).map(p => {
+    const raw = Array.isArray(p && p.scores) ? p.scores : [];
+    const scores = Array.from({ length: unit }, (_, i) => {
+      const n = Number(raw[i]);
+      return raw[i] != null && Number.isInteger(n) && n >= 1 && n <= 15 ? n : null;
+    });
+    return { name: String((p && p.name) || '').slice(0, 8), raw: scores, scores };
+  }).filter(r => r.name || r.raw.some(v => v != null));
+  let rawPar = null;
+  if (d && Array.isArray(d.par) && d.par.length >= unit) {
+    const pp = d.par.slice(0, unit).map(Number);
+    if (pp.every(n => Number.isInteger(n) && n >= 3 && n <= 6)) rawPar = pp;
+  }
+  const sh = d ? Number(d.startHole) : NaN;
+  const start = unit === 9 ? (sh >= 10 ? 10 : (sh === 1 ? 1 : null)) : null;
+  return { unit, start, courseName: String((d && d.courseName) || '').slice(0, 20), players, rawPar, par: null };
+}
+function photoError(code) {
+  switch (code) {
+    case 'cancelled': return '인식을 중지했습니다.';
+    case 'not_granted': return 'Claude 사용을 허용하지 않아 사진을 읽을 수 없습니다. 표에 직접 입력해 주세요.';
+    case 'rate_limited': return '요청이 너무 많습니다. 잠시 뒤에 다시 시도해 주세요.';
+    case 'image_rejected': return '이 사진은 읽을 수 없습니다. 다른 사진(JPEG, PNG)을 골라 주세요.';
+    case 'invalid_json': case 'empty': case 'empty_completion': case 'refused':
+      return '타수를 읽지 못했습니다. 카드 전체가 밝고 선명하게 나온 사진으로 다시 올려 주세요.';
+    default: return '사진을 읽는 중 문제가 생겼습니다. 잠시 뒤 다시 시도하거나 표에 직접 입력해 주세요.';
+  }
+}
+let teams = [], teamMode = 'draw', drawTimer = null;
+const useN = () => Math.min(4, photo.players.length);
+const pname = i => photo.players[i].name || `${i + 1}번째 줄`;
+const avgOf = p => { const v = p.scores.filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+
+function drawTeams() {
+  const n = useN(), idx = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  const t = Array(photo.players.length).fill(null);
+  idx.forEach((pi, k) => { t[pi] = k < Math.ceil(n / 2) ? 'A' : 'B'; });
+  return t;
+}
+// 평균 타수 기준: 가장 잘 친 사람 + 가장 못 친 사람 vs 가운데 두 명
+function balanceTeams() {
+  const n = useN();
+  if (n < 4) return null;
+  const arr = photo.players.slice(0, n).map((p, i) => ({ i, avg: avgOf(p) }));
+  if (arr.some(x => x.avg == null)) return null;
+  arr.sort((x, y) => x.avg - y.avg);
+  const t = Array(photo.players.length).fill(null);
+  [arr[0], arr[3]].forEach(x => { t[x.i] = 'A'; });
+  [arr[1], arr[2]].forEach(x => { t[x.i] = 'B'; });
+  return t;
+}
+function teamCounts() {
+  const n = useN(); let a = 0, b = 0;
+  for (let i = 0; i < n; i++) { if (teams[i] === 'A') a++; else if (teams[i] === 'B') b++; }
+  return { a, b, n };
+}
+function teamsValid() {
+  const { a, b, n } = teamCounts();
+  return n >= 4 ? (a === 2 && b === 2) : (a + b > 0 && a <= 2 && b <= 2);
+}
+function renderTeams() {
+  const n = useN(), manual = teamMode === 'manual';
+  const chip = (i, cls) => manual
+    ? `<button type="button" class="chip ${cls}" data-i="${i}">${esc(pname(i))}</button>`
+    : `<div class="chip ${cls}">${esc(pname(i))}</div>`;
+  const col = side => {
+    const items = [];
+    for (let i = 0; i < n; i++) if (teams[i] === side) items.push(chip(i, side.toLowerCase()));
+    return items.join('') || '<span class="empty">비어 있음</span>';
+  };
+  $('#teamBoard').innerHTML = `<div class="tcol ta"><b>A팀</b>${col('A')}</div><div class="tcol tb"><b>B팀</b>${col('B')}</div>`;
+  const pool = [];
+  for (let i = 0; i < n; i++) if (!teams[i]) pool.push(chip(i, 'n'));
+  $('#teamPool').innerHTML = pool.join('');
+  ['draw', 'balance', 'manual'].forEach(m => $('#mode-' + m).setAttribute('aria-pressed', String(teamMode === m)));
+  $('#redraw').hidden = teamMode !== 'draw';
+  const canBal = !!balanceTeams();
+  $('#mode-balance').disabled = !canBal;
+  const hints = {
+    draw: '무작위로 두 명씩 나눕니다. 마음에 들지 않으면 다시 뽑으세요.',
+    balance: '평균 타수가 가장 낮은 사람과 가장 높은 사람이 한 팀, 가운데 두 명이 한 팀입니다.',
+    manual: '이름을 누르면 A팀, B팀, 해제 순서로 바뀝니다.'
+  };
+  $('#teamHint').textContent = hints[teamMode] + (canBal ? '' : ' (밸런스 편성은 네 명의 타수가 모두 있어야 합니다.)') +
+    (photo.slots ? ' 이미 입력된 선수와 이름이 같아 같은 자리에 기록합니다. 다른 편성을 쓰려면 위 방식을 눌러 바꾸세요.' : '');
+  const ok = teamsValid(), c = teamCounts();
+  $('#teamMsg').className = 'msg' + (ok ? '' : ' err');
+  $('#teamMsg').textContent = ok ? `A팀 ${c.a}명 · B팀 ${c.b}명` : `팀을 두 명씩 맞춰 주세요. 지금은 A팀 ${c.a}명 · B팀 ${c.b}명입니다.`;
+  $('#applyPhoto').disabled = !ok;
+}
+function setMode(m) {
+  clearInterval(drawTimer);
+  photo.slots = null;
+  teamMode = m;
+  if (m === 'draw') teams = drawTeams();
+  else if (m === 'balance') teams = balanceTeams() || teams;
+  renderTeams();
+}
+function runDraw() {
+  clearInterval(drawTimer);
+  photo.slots = null;
+  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) { teams = drawTeams(); renderTeams(); return; }
+  let k = 0;
+  drawTimer = setInterval(() => {
+    teams = drawTeams(); renderTeams(); k++;
+    if (k >= 9) clearInterval(drawTimer);
+  }, 90);
+}
+
+// 사진에서 점수가 읽힌 홀 수와 마지막 홀 번호
+function photoSpan(d) {
+  let last = 0, cnt = 0;
+  for (let h = 0; h < NH; h++) if (d.players.some(p => p.scores[h] != null)) { last = h + 1; cnt++; }
+  return { last, cnt };
+}
+// 9홀 카드가 전반인지 후반인지 추정
+function guessNine(d) {
+  if (d.start === 10) return { off: 9, reason: 'card' };
+  if (d.start === 1) return { off: 0, reason: 'card' };
+  const c = curClub(), name = (d.courseName || '').trim();
+  if (c && name) {
+    const fi = c.nines[st.course.front], bi = c.nines.length > 1 ? c.nines[st.course.back] : null;
+    const hit = n => n && (name.includes(n.name) || n.name.includes(name));
+    if (hit(bi) && !hit(fi)) return { off: 9, reason: 'course' };
+    if (hit(fi) && !hit(bi)) return { off: 0, reason: 'course' };
+  }
+  if (!st.example) {
+    const has = a => st.scores.slice(a, a + 9).some(r => r.some(v => v != null));
+    if (has(0) && !has(9)) return { off: 9, reason: 'state' };
+  }
+  return { off: 0, reason: 'default' };
+}
+// 이미 입력된 선수와 이름이 모두 같으면 같은 자리에 기록한다(전반 사진과 후반 사진을 따로 올릴 때)
+function matchSlots(d) {
+  const n = Math.min(4, d.players.length);
+  if (n < 4 || st.example) return null;
+  const used = new Set(), slots = [];
+  for (let i = 0; i < n; i++) {
+    const nm = (d.players[i].name || '').trim().toLowerCase();
+    const k = nm ? st.names.findIndex(x => x && x.trim().toLowerCase() === nm) : -1;
+    if (k < 0 || used.has(k)) return null;
+    used.add(k); slots.push(k);
+  }
+  return slots;
+}
+// 읽은 값을 18홀 자리에 배치한다(9홀 카드는 선택한 9홀 자리로)
+function layoutPhoto(d) {
+  const put = arr => {
+    if (d.unit === 18) return arr;
+    const out = Array(NH).fill(null);
+    arr.forEach((v, i) => { out[d.off + i] = v; });
+    return out;
+  };
+  d.players.forEach(p => { p.scores = put(p.raw); });
+  d.par = d.rawPar ? put(d.rawPar) : null;
+}
+function renderPhotoTable() {
+  const data = photo, sp = data.span;
+  const head = '<tr><th>선수</th>' + Array.from({ length: NH }, (_, i) => `<th>${i + 1}</th>`).join('') + '</tr>';
+  const parRow = data.par ? '<tr><td>파</td>' + data.par.map(v => `<td>${v == null ? '–' : v}</td>`).join('') + '</tr>' : '';
+  const body = data.players.map((p, i) => `<tr><td>${esc(p.name || (i + 1) + '번째 줄')}</td>` + p.scores.map(v => `<td>${v == null ? '–' : v}</td>`).join('') + '</tr>').join('');
+  $('#pvtblBox').innerHTML = `<table><thead>${head}</thead><tbody>${parRow}${body}</tbody></table>`;
+  let t = '';
+  if (data.unit === 9) t = sp.cnt ? `9홀 카드에서 ${sp.cnt}개 홀의 타수를 읽었습니다. ${data.off ? '후반' : '전반'} 9홀만 기록하고 다른 9홀의 입력은 그대로 둡니다.` : '';
+  else if (sp.cnt && sp.cnt < NH) t = `${sp.last}번 홀까지 ${sp.cnt}개 홀의 타수를 읽었습니다. 경기 도중 사진이면 적힌 홀만 기록하고, 비어 있는 홀은 기존 입력을 그대로 둡니다.`;
+  $('#spanHint').textContent = t; $('#spanHint').hidden = !t;
+}
+function updateNineUI() {
+  const d = photo;
+  $('#nine-front').setAttribute('aria-pressed', String(d.off === 0));
+  $('#nine-back').setAttribute('aria-pressed', String(d.off === 9));
+  const why = {
+    card: '카드의 홀 번호나 전반·후반 표기를 보고 정했습니다.',
+    course: '카드의 코스 이름을 선택한 골프장의 코스와 맞춰 정했습니다.',
+    state: '전반에 이미 점수가 있어 후반으로 정했습니다.',
+    default: '카드에서 전반인지 후반인지 구분하지 못해 전반으로 정했습니다.',
+    user: '직접 선택했습니다.'
+  };
+  $('#nineHint').textContent = (why[d.reason] || '') + (d.reason === 'user' ? '' : ' 다르면 바꿔 주세요.');
+}
+function setNine(off) {
+  photo.off = off; photo.reason = 'user';
+  layoutPhoto(photo); photo.span = photoSpan(photo);
+  updateNineUI(); renderPhotoTable();
+}
+
+function showPhotoResult(data, file) {
+  photo = data;
+  if (data.unit === 9) { const g = guessNine(data); data.off = g.off; data.reason = g.reason; } else { data.off = 0; data.reason = ''; }
+  layoutPhoto(data);
+  data.span = photoSpan(data);
+  const url = URL.createObjectURL(file);
+  let step = 1;
+  const nineBlock = data.unit === 9 ? `<p class="step">${++step}. 어느 9홀인가요?</p>
+    <div class="seg-row" role="group" aria-label="9홀 구분">
+      <button class="seg" id="nine-front" type="button" aria-pressed="false">전반 (1~9번)</button>
+      <button class="seg" id="nine-back" type="button" aria-pressed="false">후반 (10~18번)</button>
+    </div>
+    <p class="hint" id="nineHint"></p>` : '';
+  const sTeam = ++step, sApply = ++step;
+  const extra = data.players.length > 4 ? '<p class="hint">선수가 5명 이상 보여 위에서 네 명만 팀 편성에 사용합니다.</p>' : '';
+  $('#photoResult').innerHTML = `<div class="pv">
+    <p class="step">1. 읽은 결과 확인</p>
+    <img id="pvimg" src="${url}" alt="올린 스코어카드 사진">
+    <div class="pvtbl" id="pvtblBox"></div>
+    <p class="hint" id="spanHint" hidden></p>
+    ${extra}
+    ${nineBlock}
+    <p class="step">${sTeam}. 팀 편성</p>
+    <div class="seg-row" role="group" aria-label="팀 편성 방식">
+      <button class="seg" id="mode-draw" type="button" aria-pressed="true">추첨</button>
+      <button class="seg" id="mode-balance" type="button" aria-pressed="false">밸런스</button>
+      <button class="seg" id="mode-manual" type="button" aria-pressed="false">직접</button>
+    </div>
+    <p class="hint" id="teamHint"></p>
+    <div class="tboard" id="teamBoard"></div>
+    <div class="pool" id="teamPool"></div>
+    <div class="row"><button class="btn" id="redraw" type="button">다시 뽑기</button></div>
+    <p class="msg" id="teamMsg" aria-live="polite"></p>
+    <p class="step">${sApply}. 표에 채우기</p>
+    <label class="chk"><input type="checkbox" id="applyNames" checked>선수 이름도 가져오기</label>
+    ${data.par ? '<label class="chk"><input type="checkbox" id="applyPar" checked>파 정보도 적용</label>' : ''}
+    <div class="row"><button class="btn primary" id="applyPhoto" type="button">표에 채우기</button></div>
+  </div>`;
+  teamMode = 'draw'; teams = drawTeams(); photo.slots = null;
+  const ms = matchSlots(data);
+  if (ms) { photo.slots = ms; teamMode = 'manual'; teams = data.players.map((_, i) => i < 4 ? (ms[i] < 2 ? 'A' : 'B') : null); }
+  $('#mode-draw').addEventListener('click', () => { if (teamMode === 'draw') runDraw(); else setMode('draw'); });
+  $('#mode-balance').addEventListener('click', () => setMode('balance'));
+  $('#mode-manual').addEventListener('click', () => setMode('manual'));
+  $('#redraw').addEventListener('click', runDraw);
+  $('#teamBoard').addEventListener('click', onChip);
+  $('#teamPool').addEventListener('click', onChip);
+  $('#applyPhoto').addEventListener('click', applyPhoto);
+  if (data.unit === 9) {
+    $('#nine-front').addEventListener('click', () => setNine(0));
+    $('#nine-back').addEventListener('click', () => setNine(9));
+    updateNineUI();
+  }
+  renderPhotoTable(); renderTeams();
+  const sp = data.span, m = $('#photoMsg');
+  m.className = 'msg';
+  m.textContent = `선수 ${data.players.length}명` +
+    (sp.cnt ? (data.unit === 9 ? ', 9홀 카드에서 ' + sp.cnt + '개 홀' : ', ' + sp.last + '번 홀까지 ' + sp.cnt + '개 홀') + '의 타수를 읽었습니다.' : '의 이름을 읽었습니다.') +
+    ' 아래 순서대로 확인한 뒤 표에 채우세요.';
+}
+function onChip(e) {
+  const b = e.target.closest('button.chip');
+  if (!b || teamMode !== 'manual') return;
+  photo.slots = null;
+  const i = +b.dataset.i;
+  teams[i] = teams[i] === 'A' ? 'B' : teams[i] === 'B' ? null : 'A';
+  renderTeams();
+}
+function applyPhoto() {
+  if (!photo || !teamsValid()) return;
+  leaveExample();
+  const useNames = $('#applyNames').checked, n = useN();
+  let ia = 0, ib = 0;
+  for (let i = 0; i < n; i++) {
+    const side = teams[i];
+    if (!side) continue;
+    const slot = photo.slots ? photo.slots[i] : (side === 'A' ? ia++ : 2 + ib++);
+    const row = photo.players[i];
+    for (let h = 0; h < NH; h++) if (row.scores[h] != null) st.scores[h][slot] = row.scores[h];
+    if (useNames && row.name) st.names[slot] = row.name;
+  }
+  const pc = $('#applyPar');
+  const parApplied = !!(pc && pc.checked && photo.par);
+  if (parApplied) {
+    photo.par.forEach((v, h) => { if (v != null) st.par[h] = v; });
+    st.course.clubId = ''; renderCourse();
+  }
+  st.example = false;
+  sync(); update();
+  $('#photoMsg').className = 'msg';
+  $('#photoMsg').textContent = ((photo.span && photo.span.cnt ? '팀 편성대로 ' + photo.span.last + '번 홀까지 기록했습니다.' : '팀 편성대로 이름을 채웠습니다.') + ' 사진과 비교해 틀린 칸을 고쳐 주세요.') + (parApplied ? ' 파도 읽었습니다. 위 「골프장 · 코스」의 「골프장 추가」에서 \'표에서 파 가져오기\'로 저장해 두면 다음부터 고르기만 하면 됩니다.' : '');
+  $('#tbody').scrollIntoView({ block: 'start' });
+}
+
+/* 골프장 · 코스 */
+const LIBKEY = 'holematch-courses-v1';
+const BUILTIN = { id: 'builtin-std', name: '기본 템플릿 (파72)', builtin: true, template: true, nines: [
+  { name: '전반', par: [4,4,3,5,4,4,3,4,5] }, { name: '후반', par: [4,4,3,5,4,4,3,4,5] }] };
+// 홀별 파 출처: GolfPass 스코어카드(코스별 9홀). USA 코스 1번 홀 파4는 SBS골프로 대조. 각 코스 합계 36.
+const BEARS = { id: 'builtin-bears-cheongna', name: '베어즈베스트 청라 GC', builtin: true,
+  note: '홀별 파는 GolfPass 스코어카드를 따랐고 USA 코스 1번 홀 파4는 SBS골프로 대조했습니다. 세 코스 모두 파 36입니다. 아시아 코스의 공식 명칭은 오스트랄아시아입니다. 현장 카드와 다르면 표에서 고쳐 쓰세요.',
+  nines: [
+    { name: '미국', par: [4,5,3,4,4,5,3,4,4] },
+    { name: '아시아', par: [5,4,3,4,4,4,3,4,5] },
+    { name: '유럽', par: [4,4,3,5,3,5,4,4,4] }] };
+const YANGSAN = { id: 'builtin-yangsan', name: '양산 CC', builtin: true,
+  note: '홀별 파는 양산CC 공식 홈페이지 코스 안내(yangsancc.co.kr)를 따랐습니다. 세 코스 모두 파 36입니다. 현장 카드와 다르면 골프장 편집에서 고치세요.',
+  nines: [
+    { name: '누리', par: [5,4,4,3,4,5,4,3,4] },
+    { name: '가온', par: [5,3,4,4,4,4,4,3,5] },
+    { name: '마루', par: [4,4,3,5,4,5,4,3,4] }] };
+const ASIAD = { id: 'builtin-asiad', name: '아시아드 CC', builtin: true,
+  note: '홀별 파는 golfingrecord.com의 아시아드CC 스코어카드(레이크·파인·밸리)를 따랐습니다. 세 코스 모두 파 36입니다. 현장 카드와 다르면 골프장 편집에서 고치세요.',
+  nines: [
+    { name: '레이크', par: [4,5,4,3,4,5,3,4,4] },
+    { name: '파인', par: [4,4,3,4,5,3,4,4,5] },
+    { name: '밸리', par: [4,4,3,5,4,3,4,4,5] }] };
+const JEONGSAN = { id: 'builtin-jeongsan', name: '정산 CC', builtin: true,
+  note: '홀별 파는 정산CC 공식 홈페이지 코스 안내(jeongsancc.co.kr)를 따랐습니다. 해우(Sun)·달우(Moon)·별우(Star) 모두 파 36입니다.',
+  nines: [
+    { name: '해우', par: [4,5,3,5,4,3,4,4,4] },
+    { name: '달우', par: [5,3,4,4,5,4,4,3,4] },
+    { name: '별우', par: [5,3,4,4,5,4,4,3,4] }] };
+const TONGDO = { id: 'builtin-tongdo-fine-east', name: '통도파인이스트 CC', builtin: true,
+  note: '홀별 파는 golfingrecord.com의 통도파인이스트 스코어카드(북·남 각 18홀)를 따랐습니다. 북·남 코스를 각각 OUT(전반 9홀)·IN(후반 9홀)로 나누어 넣었습니다. 모두 파 36입니다.',
+  nines: [
+    { name: '북 OUT', par: [5,4,3,4,5,4,3,4,4] },
+    { name: '북 IN', par: [4,5,3,4,4,5,4,3,4] },
+    { name: '남 OUT', par: [4,4,3,5,4,4,5,3,4] },
+    { name: '남 IN', par: [4,3,5,4,4,4,5,3,4] }] };
+const HAEUNDAE = { id: 'builtin-haeundae', name: '해운대 CC', builtin: true,
+  note: '홀별 파는 golfingrecord.com의 해운대컨트리클럽 스코어카드(로열·실크·골든)를 따랐습니다. 세 코스 모두 파 36입니다. 현장 카드와 다르면 골프장 편집에서 고치세요.',
+  nines: [
+    { name: '로열', par: [4,5,3,4,4,5,4,4,3] },
+    { name: '실크', par: [4,3,4,4,4,5,4,3,5] },
+    { name: '골든', par: [5,3,4,5,4,4,3,4,4] }] };
+const DONGRAE = { id: 'builtin-dongrae-benest', name: '동래베네스트 GC', builtin: true,
+  note: '기본 제공 골프장입니다. 홀별 파는 골프 앱 스코어 화면(OUT·IN)을 따랐습니다. OUT·IN 모두 파 36입니다. OUT 1번 파4·9번 파5는 SBS골프 홀 소개와 일치합니다.',
+  nines: [
+    { name: 'OUT', par: [4,4,3,5,3,4,4,4,5] },
+    { name: 'IN', par: [4,4,4,3,4,5,4,3,5] }] };
+const HBEACH = { id: 'builtin-haeundae-beach', name: '해운대비치 골프앤리조트', builtin: true,
+  note: '기본 제공 골프장입니다(수정·삭제 버튼이 나타나지 않습니다). 마운틴·오션 모두 파 36, 합계 72입니다. 현장 카드와 다르면 알려 주세요.',
+  nines: [
+    { name: '마운틴', par: [5,4,3,5,4,4,3,4,4] },
+    { name: '오션', par: [4,3,5,4,4,3,5,4,4] }] };
+const GAYA = { id: 'builtin-gaya', name: '가야 CC', builtin: true,
+  note: '홀별 파는 가야CC 공식 홈페이지 스코어카드(gayacc.com)를 따랐습니다. 신어·낙동·김해·수로·가락은 파 36, 퍼블릭은 파 34입니다.',
+  nines: [
+    { name: '신어', par: [4,3,5,4,4,3,4,4,5] },
+    { name: '낙동', par: [5,4,4,3,4,4,5,3,4] },
+    { name: '김해', par: [5,4,4,3,4,4,4,3,5] },
+    { name: '수로', par: [4,4,5,3,4,4,3,4,5] },
+    { name: '가락', par: [4,3,5,4,4,4,5,3,4] },
+    { name: '퍼블릭', par: [4,4,5,4,4,3,3,4,3] }] };
+const BAYSIDE = { id: 'builtin-bayside', name: '베이사이드 CC', builtin: true,
+  note: '홀별 파는 베이사이드 공식 홈페이지 코스 소개(bayside.co.kr)의 홀별 페이지를 따랐습니다. 파크·레이크·캐년 모두 파 36입니다.',
+  nines: [
+    { name: '파크', par: [4,4,5,4,3,4,3,4,5] },
+    { name: '레이크', par: [5,3,4,4,3,5,4,4,4] },
+    { name: '캐년', par: [4,3,4,5,4,3,4,4,5] }] };
+const validClub = c => c && typeof c.name === 'string' && c.name && Array.isArray(c.nines) && c.nines.length > 0 &&
+  c.nines.every(n => n && typeof n.name === 'string' && Array.isArray(n.par) && n.par.length === 9 && n.par.every(v => Number.isInteger(v) && v >= 3 && v <= 6));
+function loadLib() { try { const a = JSON.parse(localStorage.getItem(LIBKEY) || '[]'); return Array.isArray(a) ? a.filter(validClub) : []; } catch (e) { return []; } }
+let lib = loadLib();
+const saveLib = () => { try { localStorage.setItem(LIBKEY, JSON.stringify(lib)); } catch (e) {} };
+const clubs = () => [BUILTIN, BEARS, ASIAD, DONGRAE, BAYSIDE, GAYA, YANGSAN, JEONGSAN, TONGDO, HAEUNDAE, HBEACH, ...lib];
+const curClub = () => clubs().find(c => c.id === st.course.clubId) || null;
+const sum9 = a => a.reduce((x, y) => x + y, 0);
+function courseLabel() {
+  const c = curClub();
+  if (!c || c.template) return '';
+  const f = c.nines[st.course.front], b = c.nines.length > 1 ? c.nines[st.course.back] : null;
+  return `${c.name} · ${f ? f.name : ''}${b ? ' / ' + b.name : ''}`;
+}
+function leaveExample() {
+  if (!st.example) return;
+  st.scores = emptyScores(); st.names = ['', '', '', '']; st.par = DEFAULT_PAR.slice(); st.example = false;
+}
+function renderCourse() {
+  const cur = curClub();
+  const clubSel = $('#c-club');
+  clubSel.innerHTML = '<option value="">선택 안 함 (파는 표에서 직접 입력)</option>' + clubs().map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  clubSel.value = cur ? cur.id : '';
+  const opts = cur ? cur.nines.map((n, i) => `<option value="${i}">${esc(n.name)} (파 ${sum9(n.par)})</option>`).join('') : '';
+  const f = $('#c-front'), b = $('#c-back');
+  f.innerHTML = opts || '<option value="">골프장을 먼저 고르세요</option>';
+  b.innerHTML = cur && cur.nines.length > 1 ? opts : '<option value="">없음</option>';
+  f.disabled = !cur; b.disabled = !cur || cur.nines.length < 2;
+  if (cur) {
+    if (st.course.front >= cur.nines.length) st.course.front = 0;
+    if (st.course.back >= cur.nines.length) st.course.back = Math.min(1, cur.nines.length - 1);
+    f.value = String(st.course.front);
+    if (cur.nines.length > 1) b.value = String(st.course.back);
+  }
+  $('#c-del').hidden = !cur || !!cur.builtin;
+  $('#c-edit').hidden = !cur || !!cur.builtin;
+  const box = $('#cardPreview');
+  if (!cur) { box.innerHTML = '<p class="hint">골프장을 고르면 코스별 홀 파가 여기에 표시됩니다.</p>'; return; }
+  const head = '<tr><th scope="col">코스</th>' + Array.from({ length: 9 }, (_, i) => `<th scope="col">${i + 1}</th>`).join('') + '<th scope="col">합</th></tr>';
+  const rows = cur.nines.map((n, i) => {
+    const tag = i === st.course.front ? '전반' : (cur.nines.length > 1 && i === st.course.back ? '후반' : '');
+    return `<tr class="${tag ? 'on' : ''}"><th scope="row">${esc(n.name)}${tag ? `<small>${tag}</small>` : ''}</th>` +
+      n.par.map(v => `<td>${v}</td>`).join('') + `<td class="tot">${sum9(n.par)}</td></tr>`;
+  }).join('');
+  box.innerHTML = `<div class="tbl-wrap"><table class="cc"><thead>${head}</thead><tbody>${rows}</tbody></table></div>` + (cur.note ? `<p class="hint">${esc(cur.note)}</p>` : '');
+}
+function applyCourse() {
+  const c = curClub();
+  if (!c) { renderCourse(); update(); return; }
+  leaveExample();
+  const f = c.nines[st.course.front], b = c.nines.length > 1 ? c.nines[st.course.back] : null;
+  if (f) for (let i = 0; i < 9; i++) st.par[i] = f.par[i];
+  if (b) for (let i = 0; i < 9; i++) st.par[9 + i] = b.par[i];
+  sync(); renderCourse(); update();
+  const m = $('#courseMsg'); m.className = 'msg'; m.textContent = `${c.name}의 파를 표에 적용했습니다.`;
+}
+function pickClub(id) {
+  const c = clubs().find(x => x.id === id);
+  st.course.clubId = c ? c.id : '';
+  st.course.front = 0; st.course.back = c && c.nines.length > 1 ? 1 : 0;
+  applyCourse();
+}
+$('#c-club').addEventListener('change', e => pickClub(e.target.value));
+$('#c-front').addEventListener('change', e => { st.course.front = +e.target.value; applyCourse(); });
+$('#c-back').addEventListener('change', e => { st.course.back = +e.target.value; applyCourse(); });
+/* 골프장 추가 · 수정 */
+let sampleApi = null, edId = null, edSeq = 0;
+const PAR_PROMPT = [
+  '첨부한 사진은 골프장 스코어카드입니다. 코스별 홀 파(PAR)를 읽어 JSON 하나로만 답하세요.',
+  '형식: {"clubName":"골프장 이름 또는 빈 문자열","nines":[{"name":"코스 이름","par":[9개]}]}',
+  '규칙:',
+  '- 9홀 단위로 나눕니다. 18홀 카드이면 전반 9홀과 후반 9홀 두 개입니다.',
+  '- 카드에 코스 이름(예: 레이크, 힐, 미국, 유럽)이 보이면 그 이름을 name에 쓰고, 없으면 "전반", "후반"을 씁니다.',
+  '- 한 카드에 코스가 여러 개 보이면 모두 포함합니다.',
+  '- 파 값은 3~6의 정수입니다. 읽을 수 없으면 null입니다.',
+  '- 타수, 거리, 핸디캡, 합계 숫자는 넣지 마세요.'
+].join('\n');
+function nineRowHTML(name, par) {
+  const k = ++edSeq;
+  const inputs = Array.from({ length: 9 }, (_, i) =>
+    `<input class="p9" id="ed-p-${k}-${i}" type="text" inputmode="numeric" maxlength="1" autocomplete="off" aria-label="${i + 1}번 홀 파" placeholder="${i + 1}" value="${par && par[i] != null ? par[i] : ''}">`).join('');
+  return `<div class="nine"><div class="nine-h"><input class="nn" id="ed-nn-${k}" type="text" maxlength="10" autocomplete="off" placeholder="코스 이름 (예: 레이크)" aria-label="코스 이름" value="${esc(name || '')}"><span class="nsum">합계 –</span><button class="btn sm" type="button" data-act="del">삭제</button></div>` +
+    `<select class="srcsel" id="ed-src-${k}" aria-label="표에서 파 가져오기"><option value="">표에서 파 가져오기</option><option value="0">표의 1~9번 홀 파</option><option value="9">표의 10~18번 홀 파</option></select>` +
+    `<div class="par9">${inputs}</div></div>`;
+}
+function edSum(row) {
+  const v = Array.from(row.querySelectorAll('.p9')).map(i => parseInt(i.value, 10));
+  row.querySelector('.nsum').textContent = '합계 ' + (v.every(Number.isInteger) ? v.reduce((a, b) => a + b, 0) : '–');
+}
+function openEditor(club) {
+  edId = club ? club.id : null;
+  $('#edTitle').textContent = club ? '골프장 수정' : '골프장 추가';
+  $('#ed-name').value = club ? club.name : '';
+  const nines = club ? club.nines : [{ name: '', par: [] }, { name: '', par: [] }];
+  $('#edRows').innerHTML = nines.map(n => nineRowHTML(n.name, n.par)).join('');
+  document.querySelectorAll('#edRows .nine').forEach(edSum);
+  const m = $('#edMsg'); m.className = 'msg'; m.textContent = '';
+  $('#clubEditor').hidden = false;
+  $('#clubEditor').scrollIntoView({ block: 'nearest' });
+  $('#ed-name').focus();
+}
+function closeEditor() { $('#clubEditor').hidden = true; edId = null; }
+$('#c-add').addEventListener('click', () => openEditor(null));
+$('#c-edit').addEventListener('click', () => { const c = curClub(); if (c && !c.builtin) openEditor(c); });
+$('#ed-cancel').addEventListener('click', closeEditor);
+$('#ed-addnine').addEventListener('click', () => {
+  $('#edRows').insertAdjacentHTML('beforeend', nineRowHTML('', []));
+  const rows = document.querySelectorAll('#edRows .nine');
+  edSum(rows[rows.length - 1]);
+  rows[rows.length - 1].querySelector('.nn').focus();
+});
+$('#edRows').addEventListener('input', e => {
+  const t = e.target;
+  if (!t.classList.contains('p9')) return;
+  t.value = t.value.replace(/[^0-9]/g, '');
+  edSum(t.closest('.nine'));
+  if (t.value) {
+    const all = Array.from(document.querySelectorAll('#edRows .p9')), i = all.indexOf(t);
+    if (all[i + 1]) all[i + 1].focus();
+  }
+});
+$('#edRows').addEventListener('change', e => {
+  const t = e.target;
+  if (!t.classList.contains('srcsel') || t.value === '') return;
+  const off = +t.value, row = t.closest('.nine');
+  row.querySelectorAll('.p9').forEach((inp, i) => { inp.value = st.par[off + i]; });
+  t.value = '';
+  edSum(row);
+});
+$('#edRows').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act="del"]');
+  if (!b) return;
+  const rows = document.querySelectorAll('#edRows .nine');
+  if (rows.length > 1) b.closest('.nine').remove();
+});
+$('#ed-photo').addEventListener('change', async e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file || !sampleApi) return;
+  const m = $('#edMsg'); m.className = 'msg'; m.textContent = '스코어카드에서 파를 읽는 중입니다.';
+  try {
+    const d = await sampleApi.json(PAR_PROMPT, { images: file, modelTier: 'default' });
+    const nines = (d && Array.isArray(d.nines) ? d.nines : []).slice(0, 6).map(n => ({
+      name: String((n && n.name) || '').slice(0, 10),
+      par: Array.from({ length: 9 }, (_, i) => { const v = Number(n && n.par && n.par[i]); return Number.isInteger(v) && v >= 3 && v <= 6 ? v : null; })
+    })).filter(n => n.par.some(v => v != null));
+    if (!nines.length) throw { code: 'empty' };
+    $('#edRows').innerHTML = nines.map(n => nineRowHTML(n.name, n.par)).join('');
+    document.querySelectorAll('#edRows .nine').forEach(edSum);
+    if (d.clubName && !$('#ed-name').value.trim()) $('#ed-name').value = String(d.clubName).slice(0, 20);
+    m.textContent = '읽은 값을 채웠습니다. 카드와 비교해 틀린 칸을 고친 뒤 저장하세요. 코스별 합계가 36 안팎인지도 확인해 보세요.';
+  } catch (err) {
+    m.className = 'msg err'; m.textContent = photoError(err && err.code).replace('타수', '파');
+  } finally { e.target.value = ''; }
+});
+$('#ed-save').addEventListener('click', () => {
+  const m = $('#edMsg');
+  const fail = t => { m.className = 'msg err'; m.textContent = t; };
+  const name = $('#ed-name').value.trim();
+  if (!name) return fail('골프장 이름을 입력해 주세요.');
+  const rows = Array.from(document.querySelectorAll('#edRows .nine'));
+  if (!rows.length) return fail('코스(9홀)를 하나 이상 추가해 주세요.');
+  const nines = [], seen = new Set();
+  for (let i = 0; i < rows.length; i++) {
+    const nm = rows[i].querySelector('.nn').value.trim();
+    const par = Array.from(rows[i].querySelectorAll('.p9')).map(x => parseInt(x.value, 10));
+    if (!nm) return fail(`${i + 1}번째 코스 이름을 입력해 주세요.`);
+    if (seen.has(nm)) return fail(`코스 이름 「${nm}」이 두 번 들어 있습니다. 서로 다르게 적어 주세요.`);
+    if (!par.every(v => Number.isInteger(v) && v >= 3 && v <= 6)) return fail(`「${nm}」의 1~9번 홀 파를 모두 3~6 사이 숫자로 채워 주세요.`);
+    seen.add(nm); nines.push({ name: nm, par });
+  }
+  if (clubs().some(c => c.builtin && c.name === name && c.id !== edId)) return fail('내장된 골프장과 이름이 같습니다. 다른 이름으로 저장해 주세요.');
+  let club, merged = false;
+  if (edId) {
+    club = lib.find(c => c.id === edId);
+    if (!club) return fail('수정할 골프장을 찾지 못했습니다.');
+    if (lib.some(c => c.id !== edId && c.name === name)) return fail('같은 이름의 골프장이 이미 있습니다.');
+    club.name = name; club.nines = nines;
+  } else {
+    club = lib.find(c => c.name === name);
+    merged = !!club;
+    if (!club) { club = { id: 'u' + Date.now().toString(36), name, nines: [] }; lib.push(club); }
+    nines.forEach(n => { const k = club.nines.findIndex(x => x.name === n.name); if (k >= 0) club.nines[k] = n; else club.nines.push(n); });
+  }
+  saveLib();
+  closeEditor();
+  const hasScores = !st.example && st.scores.some(r => r.some(v => v != null));
+  const wasSelected = st.course.clubId === club.id;
+  let note;
+  if (wasSelected) {
+    st.course.front = Math.min(st.course.front, club.nines.length - 1);
+    st.course.back = Math.min(st.course.back, club.nines.length - 1);
+    applyCourse();
+    note = '수정한 파를 표에 다시 적용했습니다.';
+  } else if (hasScores) {
+    renderCourse();
+    note = '진행 중인 경기의 파는 바꾸지 않았습니다. 목록에서 고르면 적용됩니다.';
+  } else {
+    st.course.clubId = club.id; st.course.front = 0; st.course.back = club.nines.length > 1 ? 1 : 0;
+    applyCourse();
+    note = '표에 파를 적용했습니다.';
+  }
+  const cm = $('#courseMsg'); cm.className = 'msg';
+  cm.textContent = `${name}을(를) ${merged ? '기존 골프장에 합쳐 ' : ''}저장했습니다. ${note}`;
+});
+const SHP = 'HMCLUBS1:';
+$('#c-share').addEventListener('click', () => { $('#clubShare').hidden = !$('#clubShare').hidden; });
+$('#sh-close').addEventListener('click', () => { $('#clubShare').hidden = true; });
+$('#sh-make').addEventListener('click', () => {
+  const m = $('#sh-msg');
+  if (!lib.length) { m.className = 'msg err'; m.textContent = '직접 추가한 골프장이 아직 없습니다.'; $('#sh-text').value = ''; return; }
+  $('#sh-text').value = SHP + JSON.stringify(lib.map(c => ({ name: c.name, nines: c.nines })));
+  m.className = 'msg'; m.textContent = `골프장 ${lib.length}곳의 코드를 만들었습니다. 「복사」를 누르세요.`;
+});
+$('#sh-copy').addEventListener('click', async () => {
+  const t = $('#sh-text'), m = $('#sh-msg');
+  if (!t.value) { m.className = 'msg err'; m.textContent = '먼저 「코드 만들기」를 눌러 주세요.'; return; }
+  try { await navigator.clipboard.writeText(t.value); m.className = 'msg'; m.textContent = '복사했습니다.'; return; } catch (e) {}
+  t.focus(); t.select();
+  try { document.execCommand('copy'); m.className = 'msg'; m.textContent = '복사했습니다.'; } catch (e) { m.className = 'msg'; m.textContent = '글이 선택되었습니다. 길게 눌러 복사해 주세요.'; }
+});
+$('#sh-import').addEventListener('click', () => {
+  const m = $('#sh-msg'), raw = $('#sh-text').value.trim();
+  const fail = x => { m.className = 'msg err'; m.textContent = x; };
+  if (raw.indexOf(SHP) !== 0) return fail('붙여넣은 글이 「HMCLUBS1:」으로 시작해야 합니다. 코드를 처음부터 끝까지 붙여넣어 주세요.');
+  let arr; try { arr = JSON.parse(raw.slice(SHP.length)); } catch (e) { return fail('코드가 중간에 잘렸습니다. 다시 복사해 붙여넣어 주세요.'); }
+  if (!Array.isArray(arr)) return fail('코드 형식이 맞지 않습니다.');
+  let add = 0, upd = 0;
+  arr.forEach(c => {
+    if (!validClub(c) || clubs().some(b => b.builtin && b.name === c.name)) return;
+    const ex = lib.find(x => x.name === c.name);
+    if (ex) { ex.nines = c.nines; upd++; } else { lib.push({ id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: c.name, nines: c.nines }); add++; }
+  });
+  if (!add && !upd) return fail('가져올 골프장이 없습니다.');
+  saveLib(); renderCourse();
+  m.className = 'msg'; m.textContent = `새 골프장 ${add}곳을 추가하고 ${upd}곳을 갱신했습니다.`;
+});
+function doDelete(id) {
+  const c = lib.find(x => x.id === id);
+  $('#delBox').hidden = true;
+  if (!c) return;
+  lib = lib.filter(x => x.id !== id); saveLib();
+  if (st.course.clubId === id) st.course = { clubId: '', front: 0, back: 1 };
+  renderCourse(); update();
+  const m = $('#courseMsg'); m.className = 'msg'; m.textContent = `${c.name}을(를) 삭제했습니다. 표의 파는 그대로입니다.`;
+}
+$('#c-del').addEventListener('click', () => {
+  const c = curClub();
+  if (!c || c.builtin) return;
+  $('#delName').textContent = c.name; $('#delBox').dataset.id = c.id; $('#delBox').hidden = false;
+});
+$('#del-yes').addEventListener('click', () => doDelete($('#delBox').dataset.id));
+$('#del-no').addEventListener('click', () => { $('#delBox').hidden = true; });
+
+
+/* 입력 방식: 총 타수 / 파 대비 */
+let lastCell = null;
+function relText(d) { return d === 0 ? '0' : (d > 0 ? '+' + d : String(d)); }
+function cellText(h, p) {
+  const v = st.scores[h][p];
+  if (v == null) return '';
+  return st.inputMode === 'rel' ? relText(v - st.par[h]) : String(v);
+}
+function focusNext(t) {
+  const all = scInputs(), i = all.indexOf(t);
+  if (all[i + 1]) all[i + 1].focus();
+}
+function onScoreInput(t) {
+  const h = +t.dataset.h, p = +t.dataset.p;
+  if (st.inputMode === 'rel') {
+    let v = t.value.replace(/[^0-9+\-]/g, '').replace(/(?!^)[+\-]/g, '');
+    t.value = v;
+    if (v === '') { st.scores[h][p] = null; update(); return; }
+    if (v === '-' || v === '+') return;
+    const stroke = st.par[h] + parseInt(v, 10);
+    st.scores[h][p] = stroke >= 1 && stroke <= 15 ? stroke : null;
+    update();
+    focusNext(t);
+  } else {
+    t.value = t.value.replace(/[^0-9]/g, '');
+    st.scores[h][p] = t.value === '' ? null : toInt(t.value, 1, 15);
+    update();
+    if (t.value.length === 1 && +t.value >= 2) focusNext(t);
+  }
+}
+function showPad(on) {
+  const show = !!on && st.inputMode === 'rel';
+  $('#pad').hidden = !show;
+  document.body.classList.toggle('pad-on', show);
+}
+function applyModeUI() {
+  const rel = st.inputMode === 'rel';
+  document.querySelectorAll('input.sc').forEach(i => { i.inputMode = rel ? 'none' : 'numeric'; });
+  $('#im-stroke').setAttribute('aria-pressed', String(!rel));
+  $('#im-rel').setAttribute('aria-pressed', String(rel));
+  $('#imHint').textContent = rel
+    ? '파를 뺀 숫자를 입력합니다. 파는 0, 버디는 -1, 이글은 -2, 보기는 +1입니다. 칸을 누르면 아래에 입력 키가 나옵니다.'
+    : '4, 5처럼 그 홀에서 친 총 타수를 입력합니다.';
+  $('#legendHint').textContent = rel ? '입력하면 다음 칸으로 이동' : '2~9 입력 시 다음 칸으로 이동';
+  showPad(false);
+}
+function setInputMode(m) {
+  st.inputMode = m;
+  applyModeUI(); sync(); update();
+}
+$('#im-stroke').addEventListener('click', () => setInputMode('stroke'));
+$('#im-rel').addEventListener('click', () => setInputMode('rel'));
+$('#pad').addEventListener('pointerdown', e => { if (e.target.closest('button')) e.preventDefault(); });
+$('#pad').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b || !lastCell) return;
+  const h = +lastCell.dataset.h, p = +lastCell.dataset.p;
+  if (b.dataset.v === 'clear') {
+    st.scores[h][p] = null;
+  } else {
+    const stroke = st.par[h] + parseInt(b.dataset.v, 10);
+    if (stroke < 1 || stroke > 15) return;
+    st.scores[h][p] = stroke;
+  }
+  lastCell.value = cellText(h, p);
+  update();
+  if (b.dataset.v !== 'clear') focusNext(lastCell);
+});
+
+
+/* 스코어카드 이미지 */
+let cardBlob = null, cardUrl = '', cardName = '', downloadsApi = null;
+(async function initDownloads() {
+  try { downloadsApi = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) { downloadsApi = null; }
+})();
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+async function renderCard() {
+  try {
+    await Promise.all([document.fonts.load('400 30px "Noto Sans KR"'), document.fonts.load('500 30px "Noto Sans KR"'), document.fonts.load('700 30px "Noto Sans KR"')]);
+  } catch (e) {}
+  const SANS = '"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif';
+  const C = { ink: '#1b2430', gray: '#8b929c', blue: '#2f8cf0', navy: '#162a43', head: '#22496f', par: '#dde5ef', line: '#e4e8ef', rowA: '#fcfdfe', rowB: '#f4f6fa', teal: '#27a9c9', num: '#2c313a', card: '#f3f6fb', div: '#d5dbe4' };
+  const nm = i => st.names[i] || ['A1', 'A2', 'B1', 'B2'][i];
+  const W = 1080, P = 40, IW = W - P * 2;
+  const main = Math.min(3, Math.max(0, Number(st.round.main) || 0));
+  const order = [main].concat([0, 1, 2, 3].filter(i => i !== main));
+  const club = curClub();
+  let title = '스코어카드', barText = '전반-후반';
+  if (club && !club.template) {
+    title = club.name;
+    const f = club.nines[st.course.front], bk = club.nines.length > 1 ? club.nines[st.course.back] : null;
+    barText = [f && f.name, bk && bk.name].filter(Boolean).join('-') || barText;
+  }
+  let dateLine = '';
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(st.round.date || '');
+  if (dm) dateLine = `${dm[1]}.${dm[2]}.${dm[3]}`;
+  if (/^\d{2}:\d{2}$/.test(st.round.tee || '')) dateLine += (dateLine ? '   ' : '') + st.round.tee + ' 티오프';
+  const tot = [0, 0, 0, 0], cnt = [0, 0, 0, 0];
+  for (let h = 0; h < NH; h++) for (let p = 0; p < 4; p++) { const v = st.scores[h][p]; if (v != null) { tot[p] += v; cnt[p]++; } }
+  const totText = p => cnt[p] ? String(tot[p]) : '–';
+  // 사진: 한 장이면 크게, 두 장이면 같은 높이로 나란히(잘라내지 않음)
+  const imgs = roundPhotos.map(p => p.img).filter(i => i && i.naturalWidth);
+  const gap = 16; let photoH = 0, pws = [];
+  if (imgs.length) {
+    const ars = imgs.map(i => i.naturalWidth / i.naturalHeight);
+    let h = (IW - gap * (imgs.length - 1)) / ars.reduce((a, b) => a + b, 0);
+    h = Math.min(h, imgs.length === 1 ? 680 : 520);
+    photoH = Math.round(h); pws = ars.map(a => Math.round(a * h));
+  }
+  const headH = 190, cardH = 152, barH = 84, rowH = 82;
+  let y = P;
+  const yHead = y; y += headH;
+  const yCard = y; y += cardH + 34;
+  const yPhoto = y; if (photoH) y += photoH + 34;
+  const yTable = y; y += barH + 12 * rowH;
+  const yNote = y + 36, H = yNote + 70;
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+  const text = (str, x, yy, size, weight, color, align) => {
+    ctx.font = `${weight} ${size}px ${SANS}`; ctx.fillStyle = color; ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(str, x, yy);
+  };
+  const fit = (str, size, weight, maxW) => {
+    let s2 = size; ctx.font = `${weight} ${s2}px ${SANS}`;
+    while (ctx.measureText(str).width > maxW && s2 > 14) { s2 -= 2; ctx.font = `${weight} ${s2}px ${SANS}`; }
+    return s2;
+  };
+  // 머리: 골프장·날짜 / 대표 선수 합계
+  text(title, P, yHead + 54, fit(title, 58, 700, IW - 300), 700, C.ink);
+  if (dateLine) text(dateLine, P, yHead + 118, fit(dateLine, 32, 400, IW - 300), 400, C.gray);
+  text(totText(main), W - P, yHead + 62, 100, 700, C.blue, 'right');
+  text(nm(main), W - P, yHead + 142, fit(nm(main), 32, 500, 260), 500, C.ink, 'right');
+  // 동반자 합계 카드
+  const others = order.slice(1);
+  ctx.fillStyle = C.card; rr(ctx, P, yCard, IW, cardH, 30); ctx.fill();
+  others.forEach((p, k) => {
+    const cx = P + IW * (k + 0.5) / 3;
+    text(nm(p), cx, yCard + 50, fit(nm(p), 32, 400, IW / 3 - 40), 400, C.gray, 'center');
+    text(totText(p), cx, yCard + 108, 62, 700, C.ink, 'center');
+    if (k > 0) { ctx.fillStyle = C.div; ctx.fillRect(Math.round(P + IW * k / 3) - 1, yCard + 40, 2, 78); }
+  });
+  // 사진
+  if (photoH) {
+    const total = pws.reduce((a, b) => a + b, 0) + gap * (imgs.length - 1);
+    let x = P + Math.round((IW - total) / 2);
+    imgs.forEach((im, i) => {
+      ctx.save(); rr(ctx, x, yPhoto, pws[i], photoH, 24); ctx.clip();
+      ctx.fillStyle = C.rowB; ctx.fillRect(x, yPhoto, pws[i], photoH);
+      ctx.drawImage(im, x, yPhoto, pws[i], photoH); ctx.restore();
+      ctx.strokeStyle = C.line; ctx.lineWidth = 2; rr(ctx, x, yPhoto, pws[i], photoH, 24); ctx.stroke();
+      x += pws[i] + gap;
+    });
+  }
+  // 표 제목 줄 (코스 이름 + 깃발)
+  ctx.fillStyle = C.navy; ctx.fillRect(P, yTable, IW, barH);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(P + 38, yTable + 24, 4, 38);
+  ctx.beginPath(); ctx.moveTo(P + 42, yTable + 25); ctx.lineTo(P + 74, yTable + 33); ctx.lineTo(P + 42, yTable + 46); ctx.closePath(); ctx.fill();
+  text(barText, P + 96, yTable + barH / 2, fit(barText, 40, 500, IW - 140), 500, '#FFFFFF');
+  // 9홀 표 두 개
+  const lw = 170, hw = 78, tw = IW - lw - hw * 9;
+  const cxL = P + lw / 2, cxH = i => P + lw + hw * i + hw / 2, cxT = P + lw + hw * 9 + tw / 2;
+  const burst = (cx, cy, rOut, rIn, fill, stroke) => {
+    const n = 8; ctx.beginPath();
+    for (let k = 0; k < n * 2; k++) {
+      const r = k % 2 === 0 ? rOut : rIn, a = Math.PI * k / n - Math.PI / 2, px = cx + r * Math.cos(a), py = cy + r * Math.sin(a);
+      if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+    }
+    ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = stroke; ctx.stroke();
+  };
+  const nine = (y0, from) => {
+    const sumPar = st.par.slice(from, from + 9).reduce((a, b) => a + b, 0);
+    ctx.fillStyle = C.head; ctx.fillRect(P, y0, IW, rowH);
+    text('HOLE', cxL, y0 + rowH / 2, 30, 400, '#FFFFFF', 'center');
+    for (let i = 0; i < 9; i++) text(String(from + i + 1), cxH(i), y0 + rowH / 2, 34, 400, '#FFFFFF', 'center');
+    text('T', cxT, y0 + rowH / 2, 34, 400, '#FFFFFF', 'center');
+    const yp = y0 + rowH;
+    ctx.fillStyle = C.par; ctx.fillRect(P, yp, IW, rowH);
+    text('PAR', cxL, yp + rowH / 2, 30, 400, C.num, 'center');
+    for (let i = 0; i < 9; i++) text(String(st.par[from + i]), cxH(i), yp + rowH / 2, 34, 400, C.num, 'center');
+    text(String(sumPar), cxT, yp + rowH / 2, 34, 400, C.num, 'center');
+    order.forEach((p, r) => {
+      const yr = yp + rowH * (r + 1), my = yr + rowH / 2;
+      ctx.fillStyle = r % 2 === 0 ? C.rowA : C.rowB; ctx.fillRect(P, yr, IW, rowH);
+      ctx.fillStyle = C.line; ctx.fillRect(P, yr + rowH - 1, IW, 1);
+      text(nm(p), cxL, my, fit(nm(p), 30, 400, lw - 24), 400, '#555B66', 'center');
+      let sum = 0, c = 0;
+      for (let i = 0; i < 9; i++) {
+        const v = st.scores[from + i][p];
+        if (v == null) { text('–', cxH(i), my, 30, 400, '#b3b9c2', 'center'); continue; }
+        sum += v; c++;
+        const d = v - st.par[from + i];
+        ctx.lineWidth = 3; ctx.strokeStyle = C.num;
+        const cx0 = cxH(i);
+        const circ = r => { ctx.beginPath(); ctx.arc(cx0, my, r, 0, Math.PI * 2); ctx.stroke(); };
+        const sq = h => { ctx.strokeRect(cx0 - h, my - h, h * 2, h * 2); };
+        if (d === -1) circ(25); else if (d <= -2) { circ(22); circ(30); }
+        else if (d === 1) sq(24); else if (d >= 2) { sq(21); sq(29); }
+        text(String(d), cxH(i), my, 36, d < 0 ? 700 : 400, C.num, 'center');
+      }
+      text(c ? String(sum) : '–', cxT, my, 36, 500, c ? C.teal : '#b3b9c2', 'center');
+    });
+  };
+  nine(yTable + barH, 0);
+  nine(yTable + barH + rowH * 6, 9);
+  text('○ 버디   ◎ 이글   □ 보기   ▣ 더블보기 이상   (숫자는 파 대비, T는 총 타수)', W / 2, yNote, 24, 400, C.gray, 'center');
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  if (!blob) throw new Error('toBlob failed');
+  return blob;
+}
+$('#imgBtn').addEventListener('click', async e => {
+  const b = e.currentTarget, m = $('#actMsg');
+  b.disabled = true; m.className = 'msg'; m.textContent = '스코어카드 이미지를 만드는 중입니다.';
+  try {
+    const blob = await renderCard();
+    if (cardUrl) URL.revokeObjectURL(cardUrl);
+    cardBlob = blob; cardUrl = URL.createObjectURL(blob);
+    const d = new Date(), z = n => String(n).padStart(2, '0');
+    cardName = `2026사공회부경전-홀매치-${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}.png`;
+    $('#cardImg').src = cardUrl;
+    $('#imgOut').hidden = false;
+    const im = $('#imgMsg'); im.className = 'msg';
+    im.textContent = '이미지가 만들어졌습니다. 「이미지 저장」을 누르거나, 이미지를 길게 눌러 사진 앱에 저장하세요.';
+    m.textContent = '';
+    $('#imgOut').scrollIntoView({ block: 'nearest' });
+  } catch (err) {
+    m.className = 'msg err'; m.textContent = '이미지를 만들지 못했습니다. 잠시 뒤 다시 눌러 주세요.';
+  } finally { b.disabled = false; }
+});
+$('#imgSave').addEventListener('click', async () => {
+  if (!cardBlob) return;
+  const m = $('#imgMsg'); m.className = 'msg';
+  if (downloadsApi) {
+    try {
+      await downloadsApi.save({ filename: cardName, data: cardBlob });
+      m.textContent = '저장했습니다. 다운로드 폴더나 사진 앱에서 확인하세요.';
+    } catch (err) {
+      if (err && err.code === 'declined') m.textContent = '저장을 취소했습니다.';
+      else { m.className = 'msg err'; m.textContent = '저장하지 못했습니다. 위 이미지를 길게 눌러 저장해 주세요.'; }
+    }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = cardUrl; a.download = cardName.replace(/^.*?-홀매치-/, 'holematch-'); document.body.appendChild(a); a.click(); a.remove();
+  m.textContent = '저장을 시도했습니다. 저장되지 않으면 위 이미지를 길게 눌러 사진 앱에 저장하세요.';
+});
+
+
+/* 사진 선택창이 열리지 않는 화면을 위한 붙여넣기·끌어놓기 */
+function attachImageDrop(el, handler, onEmpty) {
+  const pick = list => { for (const f of list || []) if (f && f.type && f.type.indexOf('image/') === 0) return f; return null; };
+  el.addEventListener('paste', e => {
+    e.preventDefault();
+    const cd = e.clipboardData;
+    let f = cd ? pick(cd.files) : null;
+    if (!f && cd && cd.items) for (const it of cd.items) if (it.kind === 'file' && it.type.indexOf('image/') === 0) { f = it.getAsFile(); break; }
+    if (f) handler(f); else if (onEmpty) onEmpty();
+  });
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('over');
+    const f = pick(e.dataTransfer && e.dataTransfer.files);
+    if (f) handler(f); else if (onEmpty) onEmpty();
+  });
+  el.addEventListener('beforeinput', e => { if (e.inputType !== 'insertFromPaste' && e.inputType !== 'insertFromDrop') e.preventDefault(); });
+  el.addEventListener('cut', e => e.preventDefault());
+  el.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) && e.key !== 'Tab') e.preventDefault(); });
+}
+
+/* 라운드 정보: 날짜, 티오프, 단체 사진 */
+const PHOTOSKEY = 'holematch-photos-v1', OLDPHOTOKEY = 'holematch-photo-v1', MAXPHOTOS = 2;
+let roundPhotos = [];
+let mainKey = '';
+function refreshMainSelect() {
+  const sel = $('#round-main');
+  if (!sel) return;
+  const names = [0, 1, 2, 3].map(i => st.names[i] || ['A1', 'A2', 'B1', 'B2'][i]);
+  const key = names.join('|') + '#' + (Number(st.round.main) || 0);
+  if (key === mainKey) return;
+  mainKey = key;
+  sel.innerHTML = names.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('');
+  sel.value = String(Number(st.round.main) || 0);
+}
+function todayStr() {
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+}
+function roundInfo() {
+  const parts = [];
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(st.round.date || '');
+  if (m) {
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (!isNaN(d)) parts.push(`${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${'일월화수목금토'[d.getDay()]})`);
+  }
+  if (/^\d{2}:\d{2}$/.test(st.round.tee || '')) parts.push('티오프 ' + st.round.tee);
+  return parts.join('  ·  ');
+}
+$('#round-date').addEventListener('input', e => { st.round.date = e.target.value; save(); });
+$('#round-tee').addEventListener('input', e => { st.round.tee = e.target.value; save(); });
+if (!st.round.date) { st.round.date = todayStr(); save(); }
+
+function loadImg(url) { return new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; }); }
+function persistPhotos() {
+  try { localStorage.setItem(PHOTOSKEY, JSON.stringify(roundPhotos.map(p => p.url))); localStorage.removeItem(OLDPHOTOKEY); return true; } catch (e) { return false; }
+}
+function renderRoundPhotos() {
+  $('#rp-list').innerHTML = roundPhotos.map((p, i) => `<div class="rp-item"><img src="${p.url}" alt="라운드 사진 ${i + 1}"><button class="btn sm" type="button" data-del="${i}">사진 ${i + 1} 지우기</button></div>`).join('');
+  const full = roundPhotos.length >= MAXPHOTOS;
+  $('#rp-add').hidden = full; $('#rp-drop').hidden = full;
+  $('#rp-labeltxt').textContent = roundPhotos.length ? '사진 더 올리기' : '사진 올리기';
+}
+function clearRoundPhotos() {
+  roundPhotos = [];
+  try { localStorage.removeItem(PHOTOSKEY); localStorage.removeItem(OLDPHOTOKEY); } catch (e) {}
+  renderRoundPhotos();
+}
+async function photoToDataUrl(file, maxSide) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    src = await new Promise((res, rej) => {
+      const u = URL.createObjectURL(file), im = new Image();
+      im.onload = () => { URL.revokeObjectURL(u); res(im); }; im.onerror = rej; im.src = u;
+    });
+  }
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const k = Math.min(1, maxSide / Math.max(w, h));
+  const cv = document.createElement('canvas'); cv.width = Math.round(w * k); cv.height = Math.round(h * k);
+  const cx = cv.getContext('2d'); cx.fillStyle = '#FFFFFF'; cx.fillRect(0, 0, cv.width, cv.height);
+  cx.drawImage(src, 0, 0, cv.width, cv.height);
+  return cv.toDataURL('image/jpeg', 0.85);
+}
+async function addRoundFiles(files) {
+  const m = $('#rp-msg'); m.className = 'msg';
+  const list = Array.from(files || []).filter(f => f && f.type && f.type.indexOf('image/') === 0);
+  if (!list.length) return;
+  m.textContent = '사진을 줄이는 중입니다.';
+  let added = 0, bad = 0;
+  for (const f of list) {
+    if (roundPhotos.length >= MAXPHOTOS) break;
+    try {
+      const url = await photoToDataUrl(f, 1280);
+      const im = await loadImg(url);
+      if (!im) throw new Error('decode');
+      roundPhotos.push({ url, img: im }); added++;
+    } catch (err) { bad++; }
+  }
+  renderRoundPhotos();
+  const stored = persistPhotos();
+  if (!added) { m.className = 'msg err'; m.textContent = '이 사진은 읽을 수 없습니다. 다른 사진(JPEG, PNG)을 골라 주세요.'; return; }
+  const extra = list.length > added + bad ? ' 사진은 최대 2장이라 나머지는 넣지 못했습니다.' : '';
+  m.textContent = (stored ? `사진 ${added}장을 넣었습니다. 스코어카드 이미지를 만들면 함께 들어갑니다.` : `사진 ${added}장을 넣었습니다. 이 기기에 저장하지는 못해서 화면을 닫으면 사라집니다.`) + extra;
+}
+[$('#rp-file'), $('#rp-file2')].forEach(el => el.addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  try { await addRoundFiles(files); } finally { e.target.value = ''; }
+}));
+attachImageDrop($('#rp-drop'), f => addRoundFiles([f]), () => { const m = $('#rp-msg'); m.className = 'msg err'; m.textContent = '붙여넣은 내용에 사진이 없습니다. 사진을 먼저 복사해 주세요.'; });
+$('#rp-list').addEventListener('click', e => {
+  const b = e.target.closest('button[data-del]');
+  if (!b) return;
+  roundPhotos.splice(+b.dataset.del, 1);
+  renderRoundPhotos(); persistPhotos();
+  const m = $('#rp-msg'); m.className = 'msg'; m.textContent = '사진을 지웠습니다.';
+});
+$('#round-main').addEventListener('change', e => { st.round.main = +e.target.value || 0; mainKey = ''; save(); });
+(async function restorePhotos() {
+  try {
+    let arr = [];
+    const raw = localStorage.getItem(PHOTOSKEY);
+    if (raw) arr = JSON.parse(raw); else { const old = localStorage.getItem(OLDPHOTOKEY); if (old) arr = [old]; }
+    for (const u of arr.slice(0, MAXPHOTOS)) {
+      if (typeof u === 'string' && u.indexOf('data:image/') === 0) { const im = await loadImg(u); if (im) roundPhotos.push({ url: u, img: im }); }
+    }
+  } catch (e) {}
+  renderRoundPhotos();
+})();
+
+
+/* 게임 설정 */
+function fillSelect(id, from, to, fmt) {
+  const el = $(id);
+  el.innerHTML = Array.from({ length: to - from + 1 }, (_, i) => `<option value="${from + i}">${fmt(from + i)}</option>`).join('');
+}
+function buildRuleControls() {
+  fillSelect('#r-birdie', 0, 5, n => n === 0 ? '없음' : '+' + n + '점');
+  fillSelect('#r-eagle', 0, 10, n => n === 0 ? '없음' : '+' + n + '점');
+  fillSelect('#r-mult', 2, 5, n => n + '배');
+  $('#hgrid').innerHTML = Array.from({ length: NH }, (_, i) => `<button type="button" data-hole="${i + 1}" aria-pressed="false" aria-label="${i + 1}번 홀 배판">${i + 1}</button>`).join('');
+}
+const GAME_DESC = {
+  highlow: '각 홀에서 팀별로 잘 친 사람끼리, 못 친 사람끼리 비교합니다. 이기면 1점, 같으면 0점입니다. 둘 다 이기면 2점, 하나씩 나누면 비깁니다.',
+  teamsum: '각 홀에서 팀 두 명의 타수를 더해 합이 낮은 팀이 1점을 얻습니다. 합이 같으면 비깁니다.'
+};
+const MODE_TEXT = {
+  highlow: { win: '비교에서 이긴 선수의 버디·이글만 가산', always: '버디·이글을 한 선수는 이기지 않아도 가산' },
+  teamsum: { win: '이긴 팀 선수의 버디·이글만 가산 (선수마다)', always: '버디·이글을 한 선수가 있으면 이기지 않아도 가산' }
+};
+function applyRulesUI() {
+  const r = st.rules, g = r.game === 'teamsum' ? 'teamsum' : 'highlow';
+  $('#g-highlow').setAttribute('aria-pressed', String(g === 'highlow'));
+  $('#g-teamsum').setAttribute('aria-pressed', String(g === 'teamsum'));
+  $('#gameDesc').textContent = GAME_DESC[g];
+  const opts = $('#r-mode').options;
+  opts[0].textContent = MODE_TEXT[g].win; opts[1].textContent = MODE_TEXT[g].always;
+  $('#r-birdie').value = String(r.birdie); $('#r-eagle').value = String(r.eagle); $('#r-mult').value = String(r.mult);
+  $('#r-mode').value = r.mode; $('#r-stake').value = r.stake || '';
+  const dh = parseHoles(r.doubleHoles);
+  document.querySelectorAll('#hgrid button').forEach(b => b.setAttribute('aria-pressed', String(dh.includes(+b.dataset.hole))));
+  $('#dblSummary').textContent = dh.length ? dh.join('·') + '번 홀 ' + r.mult + '배' : '배판 없음';
+}
+function setGame(g) { st.rules.game = g; applyRulesUI(); update(); }
+$('#g-highlow').addEventListener('click', () => setGame('highlow'));
+$('#g-teamsum').addEventListener('click', () => setGame('teamsum'));
+$('#hgrid').addEventListener('click', e => {
+  const b = e.target.closest('button[data-hole]');
+  if (!b) return;
+  const n = +b.dataset.hole, set = new Set(parseHoles(st.rules.doubleHoles));
+  if (set.has(n)) set.delete(n); else set.add(n);
+  st.rules.doubleHoles = Array.from(set).sort((x, y) => x - y).join(', ');
+  applyRulesUI(); update();
+});
+document.addEventListener('change', e => { if (e.target.id && e.target.id.startsWith('r-')) { readRules(); applyRulesUI(); } });
+
+buildTable(); buildRuleControls(); applyModeUI(); sync(); renderCourse(); update();
+</script>
+
+</body></html>
